@@ -1,0 +1,39 @@
+CROSS = #aarch64-himix210-linux-sd3403v100-v1
+
+CPP	= $(CROSS)g++
+CC	= $(CROSS)gcc
+LD	= $(CROSS)ld
+AR  = $(CROSS)ar
+RM	= rm -f
+STRIP	= $(CROSS)strip
+
+MEMTRACE_SRCPATH = ./Src
+MEMTRACE_LIBPATH = ./
+OBJ_PATH = ./Obj
+BIN_PATH = ./
+
+CFLAGS += -I./Include 
+CFLAGS += -Wall -O2 -Os -g -ansi
+CFLAGS += -D_REENTRANT -msoft-float 
+
+
+#APP_LDFLAGS += -L./
+APP_LDFLAGS += -Wl,-rpath,./
+APP_LDFLAGS += -lpthread -lc -lrt -ldl
+
+
+all: pre clean mem_log_parse
+
+pre:
+	mkdir -p $(OBJ_PATH)
+
+mem_log_parse: clean_server pre
+	@echo "make server"
+	g++ -o $(OBJ_PATH)/mem_log_parse.o -c $(MEMTRACE_SRCPATH)/mem_log_parse.cpp
+	g++ -o $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o $(APP_LDFLAGS)
+
+clean_server:
+	$(RM) $(BIN_PATH)/server $(OBJ_PATH)/mem_log_parse.o
+
+clean:
+	$(RM) $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o ./a.out $(MEMTRACE_LIBPATH)/*.so $(MEMTRACE_SRCPATH)/*.o
