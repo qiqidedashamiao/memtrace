@@ -2,3 +2,7 @@
 a.out
 .vscode/*
 libpreload.so
+param
+.list/*
+.map/*
+sonia

@@ -100,9 +100,9 @@ const int TOTAL_LEN = OUTPUT_BUFSIZE_LAST - sizeof(MemLogInfo);
 
 const int BITLEN = sizeof(void *);
 
-static const char* pathList = "/root/mallocupstat/list";
-static const char* pathMap = "/root/mallocupstat/map";
-static const char* pathParam = "/root/mallocupstat/memtrace_param";
+static const char* pathList = "/root/mount/share/memtrace/list";
+static const char* pathMap = "/root/mount/share/memtrace/map";
+static const char* pathParam = "/root/mount/share/memtrace/param";
 
 typedef enum ENUM_LOGFILEOPTYPE
 {
