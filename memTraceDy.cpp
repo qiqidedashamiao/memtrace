@@ -46,6 +46,7 @@ void SaveTraceInfo(int optype, void * buf, int len);
 // void operator delete[](void *ptr) _GLIBCXX_USE_NOEXCEPT
 //   __attribute__((__externally_visible__));
 
+//内存申请释放类型
 typedef enum ENUM_MEMOPTYPE
 {
 	MEMOP_FREE = 0,
@@ -60,11 +61,19 @@ typedef enum ENUM_MEMOPTYPE
 	MEMOP_NEW_ARRAY = 9,
 }ENUM_MEMOPTYPE;
 
+
+#ifdef BACKTRACE
+// 使用backtrace获取栈信息所记录的深度，默认10
 #if defined(USE_DEP) && (USE_DEP > 0)
 const int STACK_DEP = USE_DEP;
 #else
 const int STACK_DEP = 10;
 #endif
+#else
+
+#endif
+
+
 #define OUTPUT_BUFSIZE_LAST (1024*1024)
 
 // 结构体大小32位系统为32字节，64位系统为48字节 ，不包含栈深度
@@ -74,9 +83,9 @@ typedef struct __attribute__((packed)) MemLogInfo {
 	int16_t tid;
 	int8_t type;
 	int8_t dep;
-	void *ptr;
-	void *ptrx;
-	void *ptrlr;
+	void *ptr;    // 内存指针
+	void *ptrlr;  // 调用堆栈指针
+	void *ptrx;   // remalloc 之前使用指针
 	void *spinfo[STACK_DEP];
 } MemLogInfo;
 
@@ -86,18 +95,13 @@ const int ONE_BUF_WITHSP_SIZE = (ONE_BUF_SIZE + ONE_SPINFO_SIZE);
 const int ONE_SPINFO_ITEM = (ONE_SPINFO_SIZE/8);
 
 const int ONE_ROW_SP_ITEM = (64);
-const int TOTAL_LEN = OUTPUT_BUFSIZE_LAST - sizeof(MemLogInfo); 
+const int TOTAL_LEN = OUTPUT_BUFSIZE_LAST - sizeof(MemLogInfo);
 
-const int CACHE_LEN = 4 * 1024 * 1024;
+const int BITLEN = sizeof(void *);
 
-const int LIST_LEN = CACHE_LEN / sizeof(MemLogInfo); 
-
-static pthread_mutex_t	g_mutexFree = PTHREAD_MUTEX_INITIALIZER;
-std::list<MemLogInfo> g_freeMemList;
-static pthread_mutex_t	g_mutexUsed = PTHREAD_MUTEX_INITIALIZER;
-std::list<MemLogInfo> g_usedMemList;
-static pthread_mutex_t	g_mutexAvila = PTHREAD_MUTEX_INITIALIZER;
-std::list<MemLogInfo> g_avilaMemList;
+static const char* pathList = "/root/mallocupstat/list";
+static const char* pathMap = "/root/mallocupstat/map";
+static const char* pathParam = "/root/mallocupstat/memtrace_param";
 
 typedef enum ENUM_LOGFILEOPTYPE
 {
@@ -110,7 +114,6 @@ typedef enum ENUM_LOGFILEOPTYPE
 static pthread_mutex_t	mwGlobalMutexMemTrace = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t	mwGlobalMutexWrite = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  cond = PTHREAD_COND_INITIALIZER;
-static const char* rootPath = "/root/mallocupstat/map";
 static int s_init = 0;
 
 static unsigned int starttime = 0;
@@ -143,31 +146,27 @@ void printMap(int pid)
 	{
 		return;
 	}
-	//int pid = getpid();
-	//if(0 != s_MemTraceMode.PrintMaps)
-	//{
-		char name[128];
-		struct tm t;
-		time_t tt;
-		time(&tt);
-		localtime_r(&tt, &t);
-		int len = sprintf(name, "%s/maps-%04d%02d%02d_%02d%02d%02d.txt", rootPath
-			, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
-		name[len] = '\0';
-		FILE * stream;
-		char cmd[128] = {0};
-		len = sprintf(cmd, "cat /proc/%d/maps > %s", pid, name);
-		//cmd[len] = '\0';
-		cmd[strlen(cmd) - 1] = '\0';
-		fprintf(stdout,"[%s:%d]cmd:%s\n",__FUNCTION__, __LINE__, cmd);
-		stream = popen(cmd, "w");
-		if (stream == NULL)
-		{
-			fprintf(stdout,"[%s:%d]error\n",__FUNCTION__, __LINE__);
-			return;
-		}
-		fclose(stream);
-	//}
+
+	char name[128];
+	struct tm t;
+	time_t tt;
+	time(&tt);
+	localtime_r(&tt, &t);
+	int len = sprintf(name, "%s/maps-%04d%02d%02d_%02d%02d%02d.txt", pathMap, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+	name[len] = '\0';
+	FILE *stream;
+	char cmd[128] = {0};
+	len = sprintf(cmd, "cat /proc/%d/maps > %s", pid, name);
+	// cmd[len] = '\0';
+	cmd[strlen(cmd) - 1] = '\0';
+	fprintf(stdout, "[%s:%d]cmd:%s\n", __FUNCTION__, __LINE__, cmd);
+	stream = popen(cmd, "w");
+	if (stream == NULL)
+	{
+		fprintf(stdout, "[%s:%d]error\n", __FUNCTION__, __LINE__);
+		return;
+	}
+	fclose(stream);
 }
 void* writeFunction(void* arg) 
 {
@@ -175,68 +174,10 @@ void* writeFunction(void* arg)
 	fprintf(stdout,"--zl:start threadFunction--. g_writeThread:%d\n", g_writeThread);
 	pthread_mutex_lock(&mwGlobalMutexWrite);
     while (1) {
-		#ifdef USE_FREE
-		pthread_cond_wait(&cond, &mwGlobalMutexWrite);
-		
-		
-		// 判断是否需要从usedMemList中删除数据
-		// 获取g_freeMemList的缓存数据
-		pthread_mutex_lock(&g_mutexFree);
-		std::list<MemLogInfo> freeMemList;
-		freeMemList.splice(freeMemList, g_freeMemList);
-		pthread_mutex_unlock(&g_mutexFree);
-
-		if (usedMemList.size() == 0)
-		{
-			pthread_mutex_lock(&g_mutexAvila);
-			g_avilaMemList.splice(g_avilaMemList, freeMemList);
-			pthread_mutex_unlock(&g_mutexAvila);
-			continue;
-		}
-
-		// 获取g_usedMemList的数据
-		pthread_mutex_lock(&g_mutexUsed);
-		std::list<MemLogInfo> usedMemList;
-		usedMemList.splice(usedMemList, g_usedMemList);
-		pthread_mutex_unlock(&g_mutexUsed);
-		for (auto &it : freeMemList)
-		{
-			if (it.ptr < usedMemList.front().ptr || it.ptr > usedMemList.back().ptr)
-			{
-				// 从usedMemList中删除数据
-				pthread_mutex_lock(&g_mutexAvila);
-				g_avilaMemList.splice(g_avilaMemList.end(), freeMemList, it);
-				pthread_mutex_unlock(&g_mutexAvila);
-			}
-			else
-			{
-				auto itUse = std::find_if(usedMemList.begin(), usedMemList.end(), [it.ptr](const MemLogInfo& info) {
-					return info.ptr == ptr;
-				});
-				if (itUse != usedMemList.end()) {
-					pthread_mutex_lock(&g_mutexAvila);
-					g_avilaMemList.splice(g_avilaMemList.end(), usedMemList, itUse);
-					g_avilaMemList.splice(g_avilaMemList.end(), freeMemList, it);
-					pthread_mutex_unlock(&g_mutexAvila);
-				}
-				else
-				{
-					pthread_mutex_lock(&g_mutexAvila);
-					g_avilaMemList.splice(g_avilaMemList.end(), freeMemList, it);
-					pthread_mutex_unlock(&g_mutexAvila);
-				}
-			}
-		}
-		pthread_mutex_lock(&g_mutexUsed);
-		g_usedMemList.merge(usedMemList);
-		//g_usedMemList.splice(g_usedMemList, usedMemList);
-		pthread_mutex_unlock(&g_mutexUsed);
-		#elif
         printf("Thread %d waiting...\n", g_writeThread);
         pthread_cond_wait(&cond, &mwGlobalMutexWrite);
         printf("Thread %d woken up\n", g_writeThread);
 		SaveTraceInfo(LOGFILEOP_WRITE, g_writebuf, g_writelen);
-		#endif
     }
 	pthread_mutex_unlock(&mwGlobalMutexWrite);
 	fprintf(stdout,"--zl:end threadFunction--.\n");
@@ -304,15 +245,17 @@ void send_data(const char *ipaddr, int port)
 	close(sockfd);
 }
 
-void ReadParam(int8_t &isCheck, int &traceTid, size_t traceSize , int8_t& trace)
+/**
+ * purpose: 读取memtrace_param文件，获取是否开启内存跟踪，是否跟踪栈信息，跟踪申请的内存大小，跟踪线程id
+*/
+void ReadParam(int8_t &isStart , int8_t& trace, size_t traceSize, int &traceTid)
 {
-	isCheck = 0;
+	isStart = 0;
 	traceTid = 0;
 	traceSize = 0u;
 	trace = 0;
-	int init = 0;
 	FILE * file = NULL;
-	file = fopen("/root/mallocupstat/param", "r");
+	file = fopen(pathParam, "r");
 	if(file != NULL)
 	{
 		size_t len = 0;
@@ -324,26 +267,21 @@ void ReadParam(int8_t &isCheck, int &traceTid, size_t traceSize , int8_t& trace)
 			//isCheck = atoi(buf);
 			//0:off/1:on tid size
 			//fprintf(stdout,"46885 start change memtrace_param\n");
-			sscanf(buf, "%d %d %u %d %d", &isCheck, &traceTid, &traceSize, &trace, &init);
+			sscanf(buf, "%d %d %d %d", &isStart, &trace, &traceSize, &traceTid);
 		}
 		fclose(file);
 		file = NULL;
 	}
-	fprintf(stdout,"[%s:%d]memtrace_param:%d %d %u %d %d.\n",__FUNCTION__, __LINE__, isCheck, traceTid, traceSize,trace,init);
-	if (g_lastswitch != isCheck)
+	fprintf(stdout,"[%s:%d]memtrace_param:%d %d %d %d.\n",__FUNCTION__, __LINE__, isStart,trace, traceSize, traceTid);
+	if (g_lastswitch != isStart)
 	{
+		// 启动开关变化，打印map
 		printMap(getpid());
 	}
 	
-	if (isCheck == 1)
+	if (isStart == 1)
 	{
-		#ifdef USE_FREE
-		if (g_freeMemList.size() == 0 && g_useMemList.size() == 0
-		{
-			g_freeMemList.assign(LIST_LEN, MemLogInfo());
-			fprintf(stdout,"[%s:%d]malloc g_freeMemList size:%d\n",__FUNCTION__, __LINE__, LIST_LEN);
-		}
-#else
+		// 第一次启动开关打开，创建内存信息输出缓存
 		if(g_outputbuf == NULL)
 		{
 			fprintf(stdout,"[%s:%d]malloc g_outputbuf\n",__FUNCTION__, __LINE__);
@@ -357,6 +295,7 @@ void ReadParam(int8_t &isCheck, int &traceTid, size_t traceSize , int8_t& trace)
 			memset(outputbuf, 0, OUTPUT_BUFSIZE_LAST);
 			g_outputbuf = outputbuf;
 		}
+		// 第一次启动开关打开，创建内存信息写入输出缓存
 		if(g_writebuf == NULL)
 		{
 			fprintf(stdout,"[%s:%d]malloc g_writebuf\n",__FUNCTION__, __LINE__);
@@ -369,9 +308,8 @@ void ReadParam(int8_t &isCheck, int &traceTid, size_t traceSize , int8_t& trace)
 			}
 			memset(outputbuf, 0, OUTPUT_BUFSIZE_LAST);
 			g_writebuf = outputbuf;
-
 		}
-		#endif
+		// 第一次启动开关打开，创建写入线程
 		if (g_writeThread < 0)
 		{
 			pthread_t thread;
@@ -397,11 +335,14 @@ void ReadParam(int8_t &isCheck, int &traceTid, size_t traceSize , int8_t& trace)
 	
 	return;
 }
+
+/**
+ * purpose: 读取memtrace_param参数线程，更新是否开启内存跟踪，是否跟踪栈信息，跟踪申请的内存大小，跟踪线程id等参数信息
+*/
 void* threadFunction(void* arg) {
     //int id = *(int*)arg; // 获取传递的参数
 	
 	fprintf(stdout,"--zl:start read param--.\n");
-    //std::cout << "Hello from thread " << id << std::endl;
 	
 	while(1)
 	{
@@ -439,6 +380,7 @@ void* threadFunction(void* arg) {
 			__sync_bool_compare_and_swap(&g_trace, g_trace, trace);
 		}
 
+		// 30s读取一次
 		sleep(30);
 	}
 	fprintf(stdout,"--zl:end read param--.\n");
@@ -446,6 +388,12 @@ void* threadFunction(void* arg) {
 	return NULL;
 }
 
+
+/**
+ * purpose: 创建读取参数线程
+ * param: sonit_pid 当前进程id
+ * return:
+*/
 void createThread(int sonit_pid)
 {
 	fprintf(stdout,"--zl:createThread--.\n");
@@ -473,7 +421,11 @@ void createThread(int sonit_pid)
 }
 
 
-
+/**
+ * purpose: 进程启动前初始化内存跟踪信息
+ * param:
+ * return:
+*/
 __attribute__ ((constructor))
 void _main(int argc, char** argv)
 {
@@ -508,46 +460,55 @@ void _main(int argc, char** argv)
 	}
 }
 
-
+/**
+ * purpose: 初始化内存跟踪信息
+ * param:
+ * return:
+*/
 void MemTraceInit()
 {
 	fprintf(stdout,"[%s:%d] MemTraceInit 1.\n", __FUNCTION__, __LINE__);
 	int ret = 0;
 	printMap(getpid());
-	ret = pthread_mutex_init(&mwGlobalMutexMemTrace, NULL);
+	//ret = pthread_mutex_init(&mwGlobalMutexMemTrace, NULL);
 	fprintf(stdout,"[%s:%d] MemTraceInit 2. ret: %d.\n", __FUNCTION__, __LINE__, ret);
 }
 
-
+/**
+ * purpose: 保存内存跟踪信息
+ * param: optype 操作类型 buf 内存跟踪信息 len 内存跟踪信息长度
+ * return:
+*/
 void SaveTraceInfo(int optype, void * buf, int len)
 {
 	fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 	static int total = 0;
 	static unsigned int no = 0u;
 
-	// if (LOGFILEOP_CLOSE == optype)
-	// {
-	// 	if (g_file != NULL)
-	// 	{
-	// 		fprintf(stdout,"[%s:%d][tid:%d]close file no:%d\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), no);
-	// 		total = 0;
-	// 		fflush(g_file);
-	// 		fclose(g_file);
-	// 		g_file = NULL;
-	// 	}
-	// 	return;
-	// }
+	if (LOGFILEOP_CLOSE == optype)
+	{
+		if (g_file != NULL)
+		{
+			fprintf(stdout,"[%s:%d][tid:%d]close file no:%d\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), no);
+			total = 0;
+			fflush(g_file);
+			fclose(g_file);
+			g_file = NULL;
+		}
+		return;
+	}
 	
 	if (g_file != NULL)
 	{
 		if (total >= 209715200)
 		{//>=200MB
 			total = 0;
+			fflush(g_file);
 			fclose(g_file);
 			g_file = NULL;
 		}
 	}
-	fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+	//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 	if (NULL == g_file)
 	{
 		char name[128];
@@ -555,12 +516,12 @@ void SaveTraceInfo(int optype, void * buf, int len)
 		time_t tt;
 		time(&tt);
 		localtime_r(&tt, &t);
-		sprintf(name, "/root/mallocupstat/list/memery-%04d%02d%02d_%02d%02d%02d-%u.log"
+		sprintf(name, "%s/memery-%04d%02d%02d_%02d%02d%02d-%u.log", pathList
 			, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec
 			, no);
-		fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 4\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+		//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 4\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 		g_file = fopen(name, "a");
-		fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 5\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+		//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 5\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 		if (NULL == g_file)
 		{
 			fprintf(stdout,"[%s:%d][tid:%d]open %s failed.\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), name);
@@ -569,59 +530,18 @@ void SaveTraceInfo(int optype, void * buf, int len)
 		fprintf(stdout,"[%s:%d][tid:%d]create file no:%d\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), no);
 		no++;
 	}
+	// 1表示写入文件数据基本单元大小，len表示写入数据基本单元个数
 	fwrite(buf, 1, len, g_file);
-	fflush(g_file);
+	//fflush(g_file);
 	total += len;
 	return;
 }
 
-void printSymbol(void* address) {
-    Dl_info info;
-    if (dladdr(address, &info)) {
-        printf("Function: %s\n", info.dli_sname);
-        printf("Library: %s\n", info.dli_fname);
-    } else {
-        printf("No symbol information available.\n");
-    }
-}
-
-void printStackTrace() {
-    void *addresses[10];
-    unsigned int i = 0, frame_count = 0;
-
-    // 获取当前栈帧的地址
-    void *current_frame = nullptr;
-
-#define frametrace(index, index1)                                                                                        \
-    addresses[index] = __builtin_return_address(index);                                                                  \
-    current_frame = __builtin_frame_address(index1);                                                                     \
-    fprintf(stderr,"[%s:%d] current_frame:%p, return:%p\n",__FUNCTION__, __LINE__, current_frame, addresses[index]); \
-    if (current_frame == 0 || addresses[index] == 0)                                                                     \
-    {                                                                                                                    \
-        frame_count = index;                                                                                             \
-        goto end;                                                                                                        \
-    }                                                                                                                    \
-    frame_count = index1;
-
-
-    frametrace(0, 1);
-    frametrace(1, 2);
-    frametrace(2, 3);
-    frametrace(3, 4);
-    frametrace(4, 5);
-    frametrace(5, 6);
-    frametrace(6, 7);
-    frametrace(7, 8);
-    frametrace(8, 9);
-    frametrace(9, 10);
-end:
-    fprintf(stderr,"[%s:%d] frame_count:%d\n",__FUNCTION__, __LINE__, frame_count);
-    // 打印地址
-    for (i = 0; i < frame_count; ++i) {
-        fprintf(stderr,"Frame %d: %p\n", i, (void *)addresses[i]);
-    }
-}
-
+/**
+ * purpose: 写入内存跟踪信息
+ * param:
+ * return:
+*/
 void stacktrace(unsigned int type, void *ptr, void *ptrx, unsigned long ptrlr, size_t size)
 {
 	if (s_init==0)
@@ -760,223 +680,172 @@ void stacktrace(unsigned int type, void *ptr, void *ptrx, unsigned long ptrlr, s
 	return;
 }
 
+
+/**
+ * 根据申请的内存指针地址，获取内存申请的大小
+*/
+size_t getMallocSize(void *ptr)
+{
+	size_t size = 0u;
+	if (ptr == NULL)
+	{
+		return size;
+	}
+	size = malloc_usable_size(ptr);
+	return size;
+}
+
+
+#define InsertTraceFree(typeParam) \
+{\
+	if (g_lastswitch != 0)\
+	{\
+		if (g_traceSize != 0)\
+		{\
+			size_t size = malloc_usable_size(ptr);\
+			if (size >= g_traceSize)\
+			{\
+				MemLogInfo loginfo;\
+				loginfo.type = typeParam;\
+				stacktrace(loginfo);\
+			}\
+		}\
+		else\
+		{\
+			MemLogInfo loginfo;\
+			loginfo.type = typeParam;\
+			stacktrace(loginfo);\
+		}\
+	}\
+}
+
+#define InsertTraceMalloc(typeParam, ptrParam, sizeParam) \
+{\
+	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
+	{\
+		if (gst_in_malloc != 0)
+		{\
+			return (void*)__libc_malloc(sizeParam);\
+		}\
+		gst_in_malloc = 1;\
+		MemLogInfo loginfo;\
+		loginfo.type = typeParam;\
+		loginfo.ptr = ptrParam;\
+		loginfo.ptrlr = __builtin_return_address(0);\
+		loginfo.size = sizeParam;\
+		stacktrace(loginfo);\
+	}\
+}
+
+#define InsertTraceCaMalloc(typeParam, ptrParam, sizeParam) \
+{\
+	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
+	{\
+		MemLogInfo loginfo;\
+		loginfo.type = typeParam;\
+		loginfo.ptr = ptrParam;\
+		loginfo.ptrlr = __builtin_return_address(0);\
+		loginfo.size = sizeParam;\
+		stacktrace(loginfo);\
+	}\
+}
+
+#define InsertTraceReMalloc(typeParam, ptrParam, ptrxParam, sizeParam) \
+{\
+	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize) && ptrParam != ptrxParam)\
+	{\
+		MemLogInfo loginfo;\
+		loginfo.type = typeParam;\
+		loginfo.ptr = ptrParam;\
+		loginfo.ptrx = ptrxParam;\
+		loginfo.ptrlr = __builtin_return_address(0);\
+		loginfo.size = sizeParam;\
+		stacktrace(loginfo);\
+	}\
+}
+
 extern "C" void __libc_free(void*);
-// extern "C" void free(void *ptr)
-// {
-// 	if (ptr == NULL)
-// 	{
-// 		return;
-// 	}
-// 	if(s_init==1)
-// 	{
-// 		fprintf(stdout,"[%s:%d] start\n", __FUNCTION__, __LINE__);
-// 	}
-// 	unsigned long lrp = 0u;
-// 	//stacktrace(MEMOP_FREE, ptr, NULL, lrp, 0);
-// 	__libc_free(ptr);
-// 	if (s_init==1)
-// 	{
-// 		fprintf(stdout,"[%s:%d] end\n", __FUNCTION__, __LINE__);
-// 	}
-// 	return;
-// }
+extern "C" void free(void *ptr)
+{
+	if (ptr == NULL)
+	{
+		return;
+	}
+	InsertTraceFree(MEMOP_FREE);
+	__libc_free(ptr);
+	return;
+}
 
 
+// 定义一个线程本地变量gst_in_malloc，用于标识当前线程是否在malloc中
+static __thread int gst_in_malloc = 0;	
 extern "C" void *__libc_malloc(size_t size);
 extern "C" void * malloc(size_t size)
 {
-	if(s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] start malloc:%d\n", __FUNCTION__, __LINE__,in_malloc);
-		if (in_malloc) {
-			fprintf(stdout,"[%s:%d] end malloc\n", __FUNCTION__, __LINE__);
-        	return (void*)__libc_malloc(size);
-    	}
-		// void *addresses[10];
-		// int frame_count = 0;
-		// in_malloc = 1;
-		// frame_count = backtrace(addresses, 10);
-		// for (int i = 0; i < frame_count; i++)
-		// {
-		// 	fprintf(stdout,"[%s:%d] frame %d: %p\n", __FUNCTION__, __LINE__, i, addresses[i]);
-		// }
-		//printStackTrace();
-		
-	}
-	
-	unsigned long lrp = 0u;
-	#ifdef SYSTEM64
-		__asm__ __volatile__("mov %0, X30": "=g"(lrp));
-	#elif defined(SYSTEM32)
-		__asm__ __volatile__("mov %0, lr": "=r"(lrp));
-	#else
-	#endif
-	
 	void* result = NULL;
 	result = (void*)__libc_malloc(size);
-
-	//result = original_malloc(size);
-	stacktrace(MEMOP_MALLOC, result, NULL, lrp, size);
-	
-	if (s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] end\n", __FUNCTION__, __LINE__);
-		in_malloc = 0;
-	}
+	InsertTraceMalloc(MEMOP_MALLOC, result, size);
 	return result;
 }
 
 extern "C" void *__libc_calloc(size_t, size_t);
 extern "C" void *calloc(size_t nmemb, size_t size)
 {
-	unsigned long lrp = 0u;
-	#ifdef SYSTEM64
-		__asm__ __volatile__("mov %0, X30": "=g"(lrp));
-	#elif defined(SYSTEM32)
-		__asm__ __volatile__("mov %0, lr": "=r"(lrp));
-	#else
-	#endif
-	//lrp = (unsigned long)__builtin_return_address(1);
 	void* result = NULL;
 	result = (void*)__libc_calloc(nmemb, size);
-	stacktrace(MEMOP_CALLOC, result, NULL, lrp, nmemb*size);
+	InsertTraceCaMalloc(MEMOP_CALLOC, result, nmemb*size);
 	return result;
 }
 
 extern "C" void *__libc_realloc(void*, size_t);
 extern "C" void *realloc(void *ptr, size_t size)
 {
-	unsigned long lrp = 0u;
-	#ifdef SYSTEM64
-		__asm__ __volatile__("mov %0, X30": "=g"(lrp));
-	#elif defined(SYSTEM32)
-		__asm__ __volatile__("mov %0, lr": "=r"(lrp));
-	#else
-	#endif
 	void* result = NULL;
 	result = (void*)__libc_realloc(ptr, size);
-	stacktrace(MEMOP_REALLOC, result, ptr, lrp, size);
+	InsertTraceReMalloc(MEMOP_REALLOC, result, ptr, size);
 	return result;
 }
 
 void * operator new(size_t size)
 {
-	if(s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] start\n", __FUNCTION__, __LINE__);
-	}
-	unsigned long lrp = 0u;
-	#ifdef SYSTEM64
-		__asm__ __volatile__("mov %0, X30": "=g"(lrp));
-	#elif defined(SYSTEM32)
-		__asm__ __volatile__("mov %0, lr": "=r"(lrp));
-	#else
-	#endif
 	void * result = NULL;
 	result = (void*)__libc_malloc(size);
-	stacktrace(MEMOP_NEW, result, NULL, lrp, size);
-	if(result == NULL)
-	{
-		fprintf(stdout,"=========>malloc failed!\n");
-		throw std::bad_alloc();
-	}
-	if (s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] end\n", __FUNCTION__, __LINE__);
-	}
+	InsertTraceCaMalloc(MEMOP_NEW, result, size);
 	return result;
 }
 void * operator new (size_t size, const std::nothrow_t&)
 {
-	if(s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] start\n", __FUNCTION__, __LINE__);
-	}
-	unsigned long lrp = 0u;
-	#ifdef SYSTEM64
-		__asm__ __volatile__("mov %0, X30": "=g"(lrp));
-	#elif defined(SYSTEM32)
-		__asm__ __volatile__("mov %0, lr": "=r"(lrp));
-	#else
-	#endif
 	void * result = NULL;
 	result = (void*)__libc_malloc(size);
-	stacktrace(MEMOP_NEW_NOTHROW, result, NULL, lrp, size);
-	if(result == NULL)
-	{
-		fprintf(stdout,"=========>malloc failed!\n");
-	}
-	
-	if (s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] end\n", __FUNCTION__, __LINE__);
-	}
+	InsertTraceCaMalloc(MEMOP_NEW_NOTHROW, result, size);
 	return result;
 }
 
 void * operator new[](size_t size)
 {
-	if(s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] start\n", __FUNCTION__, __LINE__);
-	}
-
-	unsigned long lrp = 0u;
-	#ifdef SYSTEM64
-		__asm__ __volatile__("mov %0, X30": "=g"(lrp));
-	#elif defined(SYSTEM32)
-		__asm__ __volatile__("mov %0, lr": "=r"(lrp));
-	#else
-	#endif
 	void * result = NULL;
 	result = (void*)__libc_malloc(size);
-	stacktrace(MEMOP_NEW_ARRAY, result, NULL, lrp, size);
-	if(result == NULL)
-	{
-		fprintf(stdout,"=========>malloc failed!\n");
-	}
-	if (s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] end\n", __FUNCTION__, __LINE__);
-	}
+	InsertTraceCaMalloc(MEMOP_NEW_ARRAY, result, size);
 	return result;
 }
 
 void operator delete(void* ptr) _GLIBCXX_USE_NOEXCEPT 
 {
-	if(s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] start ptr:%p\n", __FUNCTION__, __LINE__, ptr);
-	}
-	unsigned long lrp = 0u;
 	if(ptr != NULL)
 	{
-		stacktrace(MEMOP_DELETE, ptr, NULL, lrp, 0);
+		InsertTraceFree(MEMOP_DELETE);
 		__libc_free(ptr);
-	}
-	if (s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] end\n", __FUNCTION__, __LINE__);
 	}
 	return;
 }
 
 void operator delete[](void *ptr) _GLIBCXX_USE_NOEXCEPT
 {
-	if (s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] start ptr:%p\n", __FUNCTION__, __LINE__, ptr);
-	}
-
 	unsigned long lrp = 0u;
 	if(ptr != NULL)
 	{
-		stacktrace(MEMOP_DELETE_ARRAY, ptr, NULL, lrp, 0);
+		InsertTraceFree(MEMOP_DELETE_ARRAY);
 		__libc_free(ptr);
-	}
-	if(s_init==1)
-	{
-		fprintf(stdout,"[%s:%d] end\n", __FUNCTION__, __LINE__);
 	}
 	return;
 }
