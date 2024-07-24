@@ -54,11 +54,11 @@ typedef enum ENUM_MEMOPTYPE
 	MEMOP_DELETE_ARRAY = 2,
 	MEMOP_MALLOC = 3,
 	MEMOP_CALLOC = 4,
-	MEMOP_REALLOC = 5,
-	MEMOP_STRDUP = 6,
-	MEMOP_NEW = 7,
-	MEMOP_NEW_NOTHROW = 8,
-	MEMOP_NEW_ARRAY = 9,
+	MEMOP_NEW = 5,
+	MEMOP_NEW_NOTHROW = 6,
+	MEMOP_NEW_ARRAY = 7,
+	MEMOP_REALLOC = 8,
+	MEMOP_STRDUP = 9,
 }ENUM_MEMOPTYPE;
 
 
@@ -70,7 +70,7 @@ const int STACK_DEP = USE_DEP;
 const int STACK_DEP = 10;
 #endif
 #else
-
+const int STACK_DEP = 10;
 #endif
 
 
@@ -89,9 +89,10 @@ typedef struct __attribute__((packed)) MemLogInfo {
 	void *spinfo[STACK_DEP];
 } MemLogInfo;
 
-const int ONE_BUF_SIZE = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP;
+const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) * 2;
+const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) ;
+const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP;
 const int ONE_SPINFO_SIZE = (512);
-const int ONE_BUF_WITHSP_SIZE = (ONE_BUF_SIZE + ONE_SPINFO_SIZE);
 const int ONE_SPINFO_ITEM = (ONE_SPINFO_SIZE/8);
 
 const int ONE_ROW_SP_ITEM = (64);
@@ -189,66 +190,66 @@ void* writeFunction(void* arg)
 目的：建立tcp连接
 返回值：成功返回0，失败返回-1
 */
-int tcp_connect(const char *ipaddr, int port)
-{
-	int sockfd;
-	struct sockaddr_in servaddr;
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-	{
-		perror("socket");
-		return -1;
-	}
-	bzero(&servaddr, sizeof(servaddr));
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(port);
-	if (inet_pton(AF_INET, ipaddr, &servaddr.sin_addr) <= 0)
-	{
-		perror("inet_pton");
-		return -1;
-	}
-	if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
-	{
-		perror("connect");
-		return -1;
-	}
-	return sockfd;
-}
+// int tcp_connect(const char *ipaddr, int port)
+// {
+// 	int sockfd;
+// 	struct sockaddr_in servaddr;
+// 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+// 	{
+// 		perror("socket");
+// 		return -1;
+// 	}
+// 	bzero(&servaddr, sizeof(servaddr));
+// 	servaddr.sin_family = AF_INET;
+// 	servaddr.sin_port = htons(port);
+// 	if (inet_pton(AF_INET, ipaddr, &servaddr.sin_addr) <= 0)
+// 	{
+// 		perror("inet_pton");
+// 		return -1;
+// 	}
+// 	if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
+// 	{
+// 		perror("connect");
+// 		return -1;
+// 	}
+// 	return sockfd;
+// }
 
-/**
- * purpose: 通过tcp_connect建立链接，发送g_writebuf里面的数据
- * param:ipaddr port 
- * return:
-*/
-void send_data(const char *ipaddr, int port)
-{
-	int sockfd = tcp_connect(ipaddr, port);
-	if (sockfd < 0)
-	{
-		return;
-	}
-	int len = 0;
-	while (1)
-	{
-		pthread_mutex_lock(&mwGlobalMutexWrite);
-		if (g_writelen > 0)
-		{
-			len = write(sockfd, g_writebuf, g_writelen);
-			if (len < 0)
-			{
-				perror("write");
-				break;
-			}
-			g_writelen = 0;
-		}
-		pthread_mutex_unlock(&mwGlobalMutexWrite);
-	}
-	close(sockfd);
-}
+// /**
+//  * purpose: 通过tcp_connect建立链接，发送g_writebuf里面的数据
+//  * param:ipaddr port 
+//  * return:
+// */
+// void send_data(const char *ipaddr, int port)
+// {
+// 	int sockfd = tcp_connect(ipaddr, port);
+// 	if (sockfd < 0)
+// 	{
+// 		return;
+// 	}
+// 	int len = 0;
+// 	while (1)
+// 	{
+// 		pthread_mutex_lock(&mwGlobalMutexWrite);
+// 		if (g_writelen > 0)
+// 		{
+// 			len = write(sockfd, g_writebuf, g_writelen);
+// 			if (len < 0)
+// 			{
+// 				perror("write");
+// 				break;
+// 			}
+// 			g_writelen = 0;
+// 		}
+// 		pthread_mutex_unlock(&mwGlobalMutexWrite);
+// 	}
+// 	close(sockfd);
+// }
 
 /**
  * purpose: 读取memtrace_param文件，获取是否开启内存跟踪，是否跟踪栈信息，跟踪申请的内存大小，跟踪线程id
 */
-void ReadParam(int8_t &isStart , int8_t& trace, size_t traceSize, int &traceTid)
+void ReadParam(int &isStart , int & trace, size_t traceSize, int &traceTid)
 {
 	isStart = 0;
 	traceTid = 0;
@@ -346,10 +347,10 @@ void* threadFunction(void* arg) {
 	
 	while(1)
 	{
-		int8_t lastswitch = 0;
+		int lastswitch = 0;
 		int traceTid = 0;
 		size_t traceSize = 0u;
-		int8_t trace = 0;
+		int trace = 0;
 		ReadParam(lastswitch, traceTid, traceSize, trace);
 		if (lastswitch != g_lastswitch)
 		{
@@ -542,141 +543,206 @@ void SaveTraceInfo(int optype, void * buf, int len)
  * param:
  * return:
 */
-void stacktrace(unsigned int type, void *ptr, void *ptrx, unsigned long ptrlr, size_t size)
-{
-	if (s_init==0)
-	{
-		return;
-	}
- 	long i;
-	long* sp = &i;
+// void stacktrace(unsigned int type, void *ptr, void *ptrx, unsigned long ptrlr, size_t size)
+// {
+// 	if (s_init==0)
+// 	{
+// 		return;
+// 	}
+//  	long i;
+// 	long* sp = &i;
 	
+// 	time_t tt;
+// 	time(&tt);
+
+// 	unsigned int currtime = (unsigned int)tt;
+// 	//fprintf(stdout,"[%s:%d][tid:%d]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
+
+// 	if(0 == g_lastswitch)
+// 	{
+// 		return;
+// 	}
+	
+
+// 	unsigned int tid = syscall(SYS_gettid);
+// 	if (tid == g_writeThread)
+// 	{
+// 		return;
+// 	}
+	
+// 	fprintf(stdout,"[%s:%d][tid:%d]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
+
+// 	//printStackTrace();
+
+// 	void *addresses[STACK_DEP];
+// 	int frame_count = 0;
+// 	in_malloc = 1;
+// 	frame_count = backtrace(addresses, STACK_DEP);
+// 	for (int i = 0; i < frame_count; i++)
+// 	{
+// 		fprintf(stdout,"[%s:%d] frame %d: %p\n", __FUNCTION__, __LINE__, i, addresses[i]);
+// 	}
+
+// 	if (g_traceTid > 0 && tid != g_traceTid)
+// 	{
+// 		return;
+// 	}
+// 	if (type >= MEMOP_MALLOC && g_traceSize > 0u && size != g_traceSize)
+// 	{
+// 		return;
+// 	}
+	
+// 	fprintf(stdout,"[%s:%d][tid:%d]stacktrace tid: %ld\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), tid);
+
+// 	if (g_outputbuf == NULL)
+// 	{
+// 		return;
+// 	}
+	
+// 	pthread_mutex_lock(&mwGlobalMutexMemTrace);
+// 	//fprintf(stdout,"[%s:%d][tid:%d]stacktrace start\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+
+// 	if(g_outputbuf_pos > 0 && (currtime > g_lasttime + 30 || (g_outputbuf_pos + ONE_BUF_SIZE + 512 >= OUTPUT_BUFSIZE_LAST)))
+// 	{
+// 		pthread_mutex_lock(&mwGlobalMutexWrite);
+// 		memcpy(g_writebuf, g_outputbuf, g_outputbuf_pos);
+// 		g_writelen = g_outputbuf_pos;
+// 		pthread_cond_broadcast(&cond);
+// 		pthread_mutex_unlock(&mwGlobalMutexWrite);
+
+// 		//SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
+// 		g_outputbuf_pos = 0;
+// 		g_lasttime = currtime;
+// 	}
+// 	//fprintf(stdout,"[%s:%d][tid:%d]stacktrace start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+// 	//if((g_outputbuf_pos > 0) && (g_outputbuf_pos + ONE_BUF_SIZE >= OUTPUT_BUFSIZE_LAST))
+// 	//{
+// 	//	SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
+// 		// memcpy(g_outputbuf, &currtime, 4);
+// 		// memcpy(g_outputbuf+4, &type, 4);
+// 		// memcpy(g_outputbuf+8, &tid, 4);
+// 		// memcpy(g_outputbuf+16, &size, 8);
+// 		// memcpy(g_outputbuf+24, &ptr, 8);
+// 		// memcpy(g_outputbuf+32, &ptrx, 8);
+// 		// memcpy(g_outputbuf+40, &ptrlr, 8);
+// 		// if (type >= MEMOP_MALLOC && type <= MEMOP_NEW_ARRAY)
+// 		// {
+// 		// 	if(g_trace != 0)
+// 		// 	{
+// 		// 		memcpy(g_outputbuf+48, sp, 512);
+// 		// 		g_outputbuf_pos = ONE_BUF_WITHSP_SIZE;
+// 		// 	}
+// 		// 	else
+// 		// 	{
+// 		// 		g_outputbuf_pos = ONE_BUF_SIZE;	
+// 		// 	}
+// 		// }
+// 		// else
+// 		// {
+// 		// 	g_outputbuf_pos = ONE_BUF_SIZE;
+// 		// }
+// 		// g_lasttime = (unsigned int)tt;
+// 	//}
+// 	//else
+// 	// {
+// 		memcpy(g_outputbuf+g_outputbuf_pos, &currtime, 4);
+// 		memcpy(g_outputbuf+g_outputbuf_pos+4, &type, 4);
+// 		memcpy(g_outputbuf+g_outputbuf_pos+8, &tid, 4);
+// 		memcpy(g_outputbuf+g_outputbuf_pos+16, &size, 8);
+// 		memcpy(g_outputbuf+g_outputbuf_pos+24, &ptr, 8);
+// 		memcpy(g_outputbuf+g_outputbuf_pos+32, &ptrx, 8);
+// 		memcpy(g_outputbuf+g_outputbuf_pos+40, &ptrlr, 8);
+// 		//memcpy(g_outputbuf+g_outputbuf_pos+40, &dep, 8);
+// 		if (type >= MEMOP_MALLOC && type <= MEMOP_NEW_ARRAY)
+// 		{
+// 			if(g_trace != 0)
+// 			{
+// 				memcpy(g_outputbuf+g_outputbuf_pos+48, &sp, 512);
+// 				g_outputbuf_pos += ONE_BUF_WITHSP_SIZE;	
+// 			}
+// 			else
+// 			{
+// 				g_outputbuf_pos += ONE_BUF_SIZE;
+// 			}
+// 		}
+// 		else
+// 		{
+// 			g_outputbuf_pos += ONE_BUF_SIZE;
+// 		}
+// 	// 	if(currtime > g_lasttime + 30)
+// 	// 	{
+// 	// 		SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
+// 	// 		g_outputbuf_pos = 0;
+// 	// 		g_lasttime = (unsigned int)tt;
+// 	// 	}
+// 	// }
+// 	//fprintf(stdout," [thread:%d]stacktrace end\n", syscall(SYS_gettid));
+// 	pthread_mutex_unlock(&mwGlobalMutexMemTrace);
+// 	return;
+// }
+
+void stacktrace(MemLogInfo &logInfo)
+{
 	time_t tt;
 	time(&tt);
 
 	unsigned int currtime = (unsigned int)tt;
+	logInfo.currtime = currtime;
 	//fprintf(stdout,"[%s:%d][tid:%d]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
 
-	if(0 == g_lastswitch)
-	{
-		return;
-	}
-	
-
 	unsigned int tid = syscall(SYS_gettid);
-	if (tid == g_writeThread)
-	{
-		return;
-	}
+	logInfo.tid = tid;
+	// if (tid == g_writeThread)
+	// {
+	// 	return;
+	// }
 	
-	fprintf(stdout,"[%s:%d][tid:%d]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
+	//fprintf(stdout,"[%s:%d][tid:%d]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
 
 	//printStackTrace();
-
-	void *addresses[STACK_DEP];
-	int frame_count = 0;
-	in_malloc = 1;
-	frame_count = backtrace(addresses, STACK_DEP);
-	for (int i = 0; i < frame_count; i++)
-	{
-		fprintf(stdout,"[%s:%d] frame %d: %p\n", __FUNCTION__, __LINE__, i, addresses[i]);
-	}
 
 	if (g_traceTid > 0 && tid != g_traceTid)
 	{
 		return;
 	}
-	if (type >= MEMOP_MALLOC && g_traceSize > 0u && size != g_traceSize)
-	{
-		return;
-	}
 	
 	fprintf(stdout,"[%s:%d][tid:%d]stacktrace tid: %ld\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), tid);
-
-	if (g_outputbuf == NULL)
-	{
-		return;
-	}
 	
 	pthread_mutex_lock(&mwGlobalMutexMemTrace);
-	//fprintf(stdout,"[%s:%d][tid:%d]stacktrace start\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+	if (logInfo.type >= MEMOP_REALLOC)
+	{
+		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_REMALLOC + logInfo.dep * BITLEN);
+		g_outputbuf_pos += ONE_BUF_SIZE_REMALLOC + logInfo.dep * BITLEN;
 
-	if(g_outputbuf_pos > 0 && (currtime > g_lasttime + 30 || (g_outputbuf_pos + ONE_BUF_SIZE + 512 >= OUTPUT_BUFSIZE_LAST)))
+	}
+	else if (logInfo.type >= MEMOP_MALLOC)
+	{
+		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_MALLOC);
+		g_outputbuf_pos += ONE_BUF_SIZE_MALLOC;
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfo.spinfo, logInfo.dep * BITLEN);
+		g_outputbuf_pos += logInfo.dep * BITLEN;
+	}
+	else
+	{
+		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_FREE);
+		g_outputbuf_pos += ONE_BUF_SIZE_FREE;
+	}
+
+	if(g_outputbuf_pos > 0 && (currtime > g_lasttime + 30 || (g_outputbuf_pos >= TOTAL_LEN)))
 	{
 		pthread_mutex_lock(&mwGlobalMutexWrite);
-		memcpy(g_writebuf, g_outputbuf, g_outputbuf_pos);
+		// 交换g_writebuf 和 g_outputbuf指针的值，不交换内容
+		char * tempbuf = g_writebuf;
+		g_writebuf = g_outputbuf;
 		g_writelen = g_outputbuf_pos;
+		g_outputbuf = tempbuf;
 		pthread_cond_broadcast(&cond);
 		pthread_mutex_unlock(&mwGlobalMutexWrite);
-
-		//SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
 		g_outputbuf_pos = 0;
 		g_lasttime = currtime;
 	}
-	//fprintf(stdout,"[%s:%d][tid:%d]stacktrace start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
-	//if((g_outputbuf_pos > 0) && (g_outputbuf_pos + ONE_BUF_SIZE >= OUTPUT_BUFSIZE_LAST))
-	//{
-	//	SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
-		// memcpy(g_outputbuf, &currtime, 4);
-		// memcpy(g_outputbuf+4, &type, 4);
-		// memcpy(g_outputbuf+8, &tid, 4);
-		// memcpy(g_outputbuf+16, &size, 8);
-		// memcpy(g_outputbuf+24, &ptr, 8);
-		// memcpy(g_outputbuf+32, &ptrx, 8);
-		// memcpy(g_outputbuf+40, &ptrlr, 8);
-		// if (type >= MEMOP_MALLOC && type <= MEMOP_NEW_ARRAY)
-		// {
-		// 	if(g_trace != 0)
-		// 	{
-		// 		memcpy(g_outputbuf+48, sp, 512);
-		// 		g_outputbuf_pos = ONE_BUF_WITHSP_SIZE;
-		// 	}
-		// 	else
-		// 	{
-		// 		g_outputbuf_pos = ONE_BUF_SIZE;	
-		// 	}
-		// }
-		// else
-		// {
-		// 	g_outputbuf_pos = ONE_BUF_SIZE;
-		// }
-		// g_lasttime = (unsigned int)tt;
-	//}
-	//else
-	// {
-		memcpy(g_outputbuf+g_outputbuf_pos, &currtime, 4);
-		memcpy(g_outputbuf+g_outputbuf_pos+4, &type, 4);
-		memcpy(g_outputbuf+g_outputbuf_pos+8, &tid, 4);
-		memcpy(g_outputbuf+g_outputbuf_pos+16, &size, 8);
-		memcpy(g_outputbuf+g_outputbuf_pos+24, &ptr, 8);
-		memcpy(g_outputbuf+g_outputbuf_pos+32, &ptrx, 8);
-		memcpy(g_outputbuf+g_outputbuf_pos+40, &ptrlr, 8);
-		//memcpy(g_outputbuf+g_outputbuf_pos+40, &dep, 8);
-		if (type >= MEMOP_MALLOC && type <= MEMOP_NEW_ARRAY)
-		{
-			if(g_trace != 0)
-			{
-				memcpy(g_outputbuf+g_outputbuf_pos+48, &sp, 512);
-				g_outputbuf_pos += ONE_BUF_WITHSP_SIZE;	
-			}
-			else
-			{
-				g_outputbuf_pos += ONE_BUF_SIZE;
-			}
-		}
-		else
-		{
-			g_outputbuf_pos += ONE_BUF_SIZE;
-		}
-	// 	if(currtime > g_lasttime + 30)
-	// 	{
-	// 		SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
-	// 		g_outputbuf_pos = 0;
-	// 		g_lasttime = (unsigned int)tt;
-	// 	}
-	// }
-	//fprintf(stdout," [thread:%d]stacktrace end\n", syscall(SYS_gettid));
 	pthread_mutex_unlock(&mwGlobalMutexMemTrace);
+	
 	return;
 }
 
@@ -696,25 +762,27 @@ size_t getMallocSize(void *ptr)
 }
 
 
-#define InsertTraceFree(typeParam) \
+#define InsertTraceFree(typeParam, ptrParam) \
 {\
 	if (g_lastswitch != 0)\
 	{\
 		if (g_traceSize != 0)\
 		{\
-			size_t size = malloc_usable_size(ptr);\
+			size_t size = malloc_usable_size(ptrParam);\
 			if (size >= g_traceSize)\
 			{\
-				MemLogInfo loginfo;\
-				loginfo.type = typeParam;\
-				stacktrace(loginfo);\
+				MemLogInfo logInfo;\
+				logInfo.type = typeParam;\
+				logInfo.ptr = ptrParam;\
+				stacktrace(logInfo);\
 			}\
 		}\
 		else\
 		{\
-			MemLogInfo loginfo;\
-			loginfo.type = typeParam;\
-			stacktrace(loginfo);\
+			MemLogInfo logInfo;\
+			logInfo.type = typeParam;\
+			logInfo.ptr = ptrParam;\
+			stacktrace(logInfo);\
 		}\
 	}\
 }
@@ -723,17 +791,23 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
 	{\
-		if (gst_in_malloc != 0)
+		if (gst_in_malloc != 0)\
 		{\
 			return (void*)__libc_malloc(sizeParam);\
 		}\
 		gst_in_malloc = 1;\
-		MemLogInfo loginfo;\
-		loginfo.type = typeParam;\
-		loginfo.ptr = ptrParam;\
-		loginfo.ptrlr = __builtin_return_address(0);\
-		loginfo.size = sizeParam;\
-		stacktrace(loginfo);\
+		MemLogInfo logInfo;\
+		logInfo.type = typeParam;\
+		logInfo.ptr = ptrParam;\
+		logInfo.ptrlr = __builtin_return_address(0);\
+		logInfo.size = sizeParam;\
+		logInfo.dep = backtrace(logInfo.spinfo, STACK_DEP);\
+		for (int i = 0; i < logInfo.dep; i++)\
+		{\
+			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfo.spinfo[i]);\
+		}\
+		stacktrace(logInfo);\
+		gst_in_malloc = 0;\
 	}\
 }
 
@@ -741,12 +815,17 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
 	{\
-		MemLogInfo loginfo;\
-		loginfo.type = typeParam;\
-		loginfo.ptr = ptrParam;\
-		loginfo.ptrlr = __builtin_return_address(0);\
-		loginfo.size = sizeParam;\
-		stacktrace(loginfo);\
+		MemLogInfo logInfo;\
+		logInfo.type = typeParam;\
+		logInfo.ptr = ptrParam;\
+		logInfo.ptrlr = __builtin_return_address(0);\
+		logInfo.size = sizeParam;\
+		logInfo.dep = backtrace(logInfo.spinfo, STACK_DEP);\
+		for (int i = 0; i < logInfo.dep; i++)\
+		{\
+			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfo.spinfo[i]);\
+		}\
+		stacktrace(logInfo);\
 	}\
 }
 
@@ -754,13 +833,18 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize) && ptrParam != ptrxParam)\
 	{\
-		MemLogInfo loginfo;\
-		loginfo.type = typeParam;\
-		loginfo.ptr = ptrParam;\
-		loginfo.ptrx = ptrxParam;\
-		loginfo.ptrlr = __builtin_return_address(0);\
-		loginfo.size = sizeParam;\
-		stacktrace(loginfo);\
+		MemLogInfo logInfo;\
+		logInfo.type = typeParam;\
+		logInfo.ptr = ptrParam;\
+		logInfo.ptrx = ptrxParam;\
+		logInfo.ptrlr = __builtin_return_address(0);\
+		logInfo.size = sizeParam;\
+		logInfo.dep = backtrace(logInfo.spinfo, STACK_DEP);\
+		for (int i = 0; i < logInfo.dep; i++)\
+		{\
+			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfo.spinfo[i]);\
+		}\
+		stacktrace(logInfo);\
 	}\
 }
 
@@ -771,7 +855,7 @@ extern "C" void free(void *ptr)
 	{
 		return;
 	}
-	InsertTraceFree(MEMOP_FREE);
+	InsertTraceFree(MEMOP_FREE, ptr);
 	__libc_free(ptr);
 	return;
 }
@@ -833,7 +917,7 @@ void operator delete(void* ptr) _GLIBCXX_USE_NOEXCEPT
 {
 	if(ptr != NULL)
 	{
-		InsertTraceFree(MEMOP_DELETE);
+		InsertTraceFree(MEMOP_DELETE, ptr);
 		__libc_free(ptr);
 	}
 	return;
@@ -844,7 +928,7 @@ void operator delete[](void *ptr) _GLIBCXX_USE_NOEXCEPT
 	unsigned long lrp = 0u;
 	if(ptr != NULL)
 	{
-		InsertTraceFree(MEMOP_DELETE_ARRAY);
+		InsertTraceFree(MEMOP_DELETE_ARRAY, ptr);
 		__libc_free(ptr);
 	}
 	return;
