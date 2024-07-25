@@ -78,11 +78,11 @@ const int STACK_DEP = 10;
 
 // 结构体大小32位系统为32字节，64位系统为48字节 ，不包含栈深度
 typedef struct __attribute__((packed)) MemLogInfo {
-	unsigned int currtime;
-	int size;
-	int16_t tid;
 	int8_t type;
 	int8_t dep;
+	int16_t tid;
+	unsigned int currtime;
+	int size;
 	void *ptr;    // 内存指针
 	void *ptrlr;  // 调用堆栈指针
 	void *ptrx;   // remalloc 之前使用指针

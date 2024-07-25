@@ -17,6 +17,8 @@ const int ONE_SPINFO_ITEM = (ONE_SPINFO_SIZE/8);
 const int ONE_ROW_SP_ITEM = (64);
 
 
+
+//内存申请释放类型
 typedef enum ENUM_MEMOPTYPE
 {
 	MEMOP_FREE = 0,
@@ -24,11 +26,11 @@ typedef enum ENUM_MEMOPTYPE
 	MEMOP_DELETE_ARRAY = 2,
 	MEMOP_MALLOC = 3,
 	MEMOP_CALLOC = 4,
-	MEMOP_REALLOC = 5,
-	MEMOP_STRDUP = 6,
-	MEMOP_NEW = 7,
-	MEMOP_NEW_NOTHROW = 8,
-	MEMOP_NEW_ARRAY = 9,
+	MEMOP_NEW = 5,
+	MEMOP_NEW_NOTHROW = 6,
+	MEMOP_NEW_ARRAY = 7,
+	MEMOP_REALLOC = 8,
+	MEMOP_STRDUP = 9,
 }ENUM_MEMOPTYPE;
 
 typedef struct MemLogInfo{
@@ -42,6 +44,11 @@ typedef struct MemLogInfo{
 	unsigned long ptrlr;
 	unsigned long spinfo[ONE_SPINFO_ITEM];
 }MemLogInfo;
+
+
+const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) * 2;
+const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) ;
+const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP;
 
 void output_info(const char * soniaPath, int isAddr2Symbol);
 void parse_logfile(const     char * name, int isAddr2Symbol, int logDetail = 0, int isFullPath = 0);
@@ -205,17 +212,18 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 		{
 			offset = 0;
 			memset(szSPAddr, 0, sizeof(szSPAddr));
-			for (int i = 0; i < ONE_SPINFO_ITEM; i++)
+			for (int i = 0; i < info.dep; i++)
 			{
 				void * p = (void *)(info.spinfo[i]);
-				if (p)
-				{
-					len = sprintf(szSPAddr + offset, "\t%p", p);
-				}
-				else
-				{
-					len = sprintf(szSPAddr + offset, "\t0x0");
-				}
+				len = sprintf(szSPAddr + offset, "\t%p", p);
+				// if (p)
+				// {
+				// 	len = sprintf(szSPAddr + offset, "\t%p", p);
+				// }
+				// else
+				// {
+				// 	len = sprintf(szSPAddr + offset, "\t0x0");
+				// }
 				if (len > 0)
 				{
 					offset += len;
@@ -230,21 +238,22 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 		}
 		else
 		{
-			for (int i = 0; i < ONE_SPINFO_ITEM; i++)
+			for (int i = 0; i < info.dep; i++)
 			{
 				if (!(i%ONE_ROW_SP_ITEM))
 				{
 					printf("\n");
 				}
 				void * p = (void *)(info.spinfo[i]);
-				if (p)
-				{
-					printf("\t%p", p);
-				}
-				else
-				{
-					printf("\t0x0");
-				}
+				printf("\t%p", p);
+				// if (p)
+				// {
+				// 	printf("\t%p", p);
+				// }
+				// else
+				// {
+				// 	printf("\t0x0");
+				// }
 			}
 			printf("\n");
 		}
@@ -426,25 +435,56 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 	if(file != NULL)
 	{
 		size_t len = 0;
+		size_t lenLeft = 0;
 		size_t spInfoLen = 0;
 		MemLogInfo info;
 		do
 		{
 			memset(&info, 0, sizeof(info));
-			len = fread(&info, 1, ONE_BUF_SIZE, file);
-			if (ONE_BUF_SIZE == len) 
+			len = fread(&info, 1, ONE_BUF_SIZE_FREE, file);
+			if (ONE_BUF_SIZE_FREE == len) 
 			{
 				if (logDetail)
 				{
 					printf("<Detail>\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\t\n",
 						(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr));
 				}
-				if (info.type >= MEMOP_FREE && info.type <= MEMOP_NEW_ARRAY)
+				if (info.type >= MEMOP_FREE && info.type < MEMOP_STRDUP)
 				{
-					if (info.type >= MEMOP_MALLOC)
+					if (info.type >= MEMOP_MALLOC && info.type != MEMOP_REALLOC)
 					{
-						spInfoLen = fread(info.spinfo, 1, ONE_SPINFO_SIZE, file);
-						if (ONE_SPINFO_SIZE != spInfoLen) 
+						lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_FREE, 1, ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE, file);
+						if (ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE != lenLeft) 
+						{
+							printf("error spInfoLen[%lu]\n", lenLeft);
+							g_errorItemNum2++;
+							break;
+						}
+					}
+					else if(info.type == MEMOP_REALLOC)
+					{
+						lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_MALLOC, 1, ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC, file);
+						if (ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC != lenLeft) 
+						{
+							printf("error spInfoLen[%lu]\n", lenLeft);
+							g_errorItemNum2++;
+							break;
+						}
+					}
+					else
+					{
+						// spInfoLen = fread(info.spinfo, 1, ONE_SPINFO_SIZE, file);
+						// if (ONE_SPINFO_SIZE != spInfoLen) 
+						// {
+						// 	printf("error spInfoLen[%lu]\n", spInfoLen);
+						// 	g_errorItemNum2++;
+						// 	break;
+						// }
+					}
+					if (info.dep > 0)
+					{
+						spInfoLen = fread(info.spinfo, 1, info.dep, file);
+						if (info.dep != spInfoLen) 
 						{
 							printf("error spInfoLen[%lu]\n", spInfoLen);
 							g_errorItemNum2++;
@@ -461,6 +501,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					{
 						addx_addr(info);
 						g_deladdNum++;
+						g_addNum++;
 					}
 					else
 					{
@@ -481,7 +522,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 				g_errorItemNum2++;
 			}
 			
-		} while(ONE_BUF_SIZE == len);
+		} while(ONE_BUF_SIZE_FREE == len);
 	
 		fclose(file);
 		file = NULL;
