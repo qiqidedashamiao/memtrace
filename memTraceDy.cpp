@@ -75,7 +75,7 @@ const int STACK_DEP = 10;
 
 
 #define OUTPUT_BUFSIZE_LAST (1024*1024)
-
+const int BITLEN = sizeof(void *);
 // 结构体大小32位系统为32字节，64位系统为48字节 ，不包含栈深度
 typedef struct __attribute__((packed)) MemLogInfo {
 	int8_t type;
@@ -86,19 +86,22 @@ typedef struct __attribute__((packed)) MemLogInfo {
 	void *ptr;    // 内存指针
 	void *ptrlr;  // 调用堆栈指针
 	void *ptrx;   // remalloc 之前使用指针
-	void *spinfo[STACK_DEP];
+	//void *spinfo[STACK_DEP];
 } MemLogInfo;
 
-const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) * 2;
-const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) ;
-const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP;
+typedef struct MemLogInfoEx {
+	MemLogInfo logInfo;
+	void *spinfo[STACK_DEP];
+} MemLogInfoEx;
+
+const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) -  sizeof(void *) * 2;
+const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) -  sizeof(void *) ;
+const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo);
 const int ONE_SPINFO_SIZE = (512);
 const int ONE_SPINFO_ITEM = (ONE_SPINFO_SIZE/8);
 
 const int ONE_ROW_SP_ITEM = (64);
 const int TOTAL_LEN = OUTPUT_BUFSIZE_LAST - sizeof(MemLogInfo);
-
-const int BITLEN = sizeof(void *);
 
 static const char* pathList = "/root/mount/share/memtrace/list";
 static const char* pathMap = "/root/mount/share/memtrace/map";
@@ -681,11 +684,12 @@ void SaveTraceInfo(int optype, void * buf, int len)
 // 	return;
 // }
 
-void stacktrace(MemLogInfo &logInfo)
+void stacktrace(MemLogInfoEx &logInfoEx)
 {
 	time_t tt;
 	time(&tt);
 
+	MemLogInfo &logInfo = logInfoEx.logInfo;
 	unsigned int currtime = (unsigned int)tt;
 	logInfo.currtime = currtime;
 	//fprintf(stdout,"[%s:%d][tid:%d]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
@@ -719,7 +723,7 @@ void stacktrace(MemLogInfo &logInfo)
 	{
 		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_MALLOC);
 		g_outputbuf_pos += ONE_BUF_SIZE_MALLOC;
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfo.spinfo, logInfo.dep * BITLEN);
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);
 		g_outputbuf_pos += logInfo.dep * BITLEN;
 	}
 	else
@@ -771,18 +775,20 @@ size_t getMallocSize(void *ptr)
 			size_t size = malloc_usable_size(ptrParam);\
 			if (size >= g_traceSize)\
 			{\
-				MemLogInfo logInfo;\
+				MemLogInfoEx logInfoEx;\
+				MemLogInfo &logInfo = logInfoEx.logInfo;\
 				logInfo.type = typeParam;\
 				logInfo.ptr = ptrParam;\
-				stacktrace(logInfo);\
+				stacktrace(logInfoEx);\
 			}\
 		}\
 		else\
 		{\
-			MemLogInfo logInfo;\
+			MemLogInfoEx logInfoEx;\
+			MemLogInfo &logInfo = logInfoEx.logInfo;\
 			logInfo.type = typeParam;\
 			logInfo.ptr = ptrParam;\
-			stacktrace(logInfo);\
+			stacktrace(logInfoEx);\
 		}\
 	}\
 }
@@ -796,17 +802,18 @@ size_t getMallocSize(void *ptr)
 			return (void*)__libc_malloc(sizeParam);\
 		}\
 		gst_in_malloc = 1;\
-		MemLogInfo logInfo;\
+		MemLogInfoEx logInfoEx;\
+		MemLogInfo &logInfo = logInfoEx.logInfo;\
 		logInfo.type = typeParam;\
 		logInfo.ptr = ptrParam;\
 		logInfo.ptrlr = __builtin_return_address(0);\
 		logInfo.size = sizeParam;\
-		logInfo.dep = backtrace(logInfo.spinfo, STACK_DEP);\
+		logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP);\
 		for (int i = 0; i < logInfo.dep; i++)\
 		{\
-			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfo.spinfo[i]);\
+			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfoEx.spinfo);\
 		}\
-		stacktrace(logInfo);\
+		stacktrace(logInfoEx);\
 		gst_in_malloc = 0;\
 	}\
 }
@@ -815,17 +822,18 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
 	{\
-		MemLogInfo logInfo;\
+		MemLogInfoEx logInfoEx;\
+		MemLogInfo &logInfo = logInfoEx.logInfo;\
 		logInfo.type = typeParam;\
 		logInfo.ptr = ptrParam;\
 		logInfo.ptrlr = __builtin_return_address(0);\
 		logInfo.size = sizeParam;\
-		logInfo.dep = backtrace(logInfo.spinfo, STACK_DEP);\
+		logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP);\
 		for (int i = 0; i < logInfo.dep; i++)\
 		{\
-			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfo.spinfo[i]);\
+			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfoEx.spinfo[i]);\
 		}\
-		stacktrace(logInfo);\
+		stacktrace(logInfoEx);\
 	}\
 }
 
@@ -833,18 +841,19 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize) && ptrParam != ptrxParam)\
 	{\
-		MemLogInfo logInfo;\
+		MemLogInfoEx logInfoEx;\
+		MemLogInfo &logInfo = logInfoEx.logInfo;\
 		logInfo.type = typeParam;\
 		logInfo.ptr = ptrParam;\
 		logInfo.ptrx = ptrxParam;\
 		logInfo.ptrlr = __builtin_return_address(0);\
 		logInfo.size = sizeParam;\
-		logInfo.dep = backtrace(logInfo.spinfo, STACK_DEP);\
+		logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP);\
 		for (int i = 0; i < logInfo.dep; i++)\
 		{\
-			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfo.spinfo[i]);\
+			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfoEx.spinfo[i]);\
 		}\
-		stacktrace(logInfo);\
+		stacktrace(logInfoEx);\
 	}\
 }
 

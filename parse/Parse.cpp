@@ -42,13 +42,18 @@ typedef struct MemLogInfo{
 	unsigned long ptr;
 	unsigned long ptrx;
 	unsigned long ptrlr;
-	unsigned long spinfo[ONE_SPINFO_ITEM];
+	//unsigned long spinfo[ONE_SPINFO_ITEM];
 }MemLogInfo;
 
 
-const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) * 2;
-const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP -  sizeof(void *) ;
-const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo) - sizeof(void *) * STACK_DEP;
+typedef struct MemLogInfoEx {
+	MemLogInfo logInfo;
+	void *spinfo[STACK_DEP];
+} MemLogInfoEx;
+
+const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) -  sizeof(void *) * 2;
+const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) -  sizeof(void *) ;
+const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo);
 
 void output_info(const char * soniaPath, int isAddr2Symbol);
 void parse_logfile(const     char * name, int isAddr2Symbol, int logDetail = 0, int isFullPath = 0);
