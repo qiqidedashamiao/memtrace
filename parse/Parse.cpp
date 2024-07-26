@@ -33,17 +33,20 @@ typedef enum ENUM_MEMOPTYPE
 	MEMOP_STRDUP = 9,
 }ENUM_MEMOPTYPE;
 
-typedef struct MemLogInfo{
+const int STACK_DEP = 10;
+const int BITLEN = sizeof(void *);
+
+typedef struct __attribute__((packed)) MemLogInfo {
+	int8_t type;
+	int8_t dep;
+	int16_t tid;
 	unsigned int currtime;
-	int type;
-	int tid;
-	int resover;
-	unsigned long size;
-	unsigned long ptr;
-	unsigned long ptrx;
-	unsigned long ptrlr;
-	//unsigned long spinfo[ONE_SPINFO_ITEM];
-}MemLogInfo;
+	int size;
+	void *ptr;    // 内存指针
+	void *ptrlr;  // 调用堆栈指针
+	void *ptrx;   // remalloc 之前使用指针
+	//void *spinfo[STACK_DEP];
+} MemLogInfo;
 
 
 typedef struct MemLogInfoEx {
@@ -61,17 +64,17 @@ void get_logfilelist(const char * name, int isAddr2Symbol, int logDetail = 0, in
 void get_spfile(const     char * name, int isFullPath, const char * soniaPath);
 
 
-typedef std::map<long, MemLogInfo> AddrMap;
-typedef std::map<long, MemLogInfo>::value_type AddrMapType;
-typedef std::map<long, MemLogInfo>::iterator AddrMapIter;
+typedef std::map<void *, MemLogInfoEx> AddrMap;
+typedef std::map<void *, MemLogInfoEx>::value_type AddrMapType;
+typedef std::map<void *, MemLogInfoEx>::iterator AddrMapIter;
 
 typedef std::map<int, unsigned int> TidStatMap;
 typedef std::map<int, unsigned int>::value_type TidStatMapType;
 typedef std::map<int, unsigned int>::iterator TidStatMapIter;
 
-typedef std::map<unsigned long, unsigned int> LRStatMap;
-typedef std::map<unsigned long, unsigned int>::value_type LRStatMapType;
-typedef std::map<unsigned long, unsigned int>::iterator LRStatMapIter;
+typedef std::map<void *, unsigned int> LRStatMap;
+typedef std::map<void *, unsigned int>::value_type LRStatMapType;
+typedef std::map<void *, unsigned int>::iterator LRStatMapIter;
 
 AddrMap g_addrMap;
 
@@ -129,37 +132,37 @@ int main(int argc, char * argv[])
 	return 0;
 }
 
-void add_addr(MemLogInfo & info)
+void add_addr(MemLogInfoEx & info)
 {
 	AddrMapIter iter;
-	iter = g_addrMap.find(info.ptr);
+	iter = g_addrMap.find(info.logInfo.ptr);
 	if (iter != g_addrMap.end())
 	{
 		g_addrMap.erase(iter);
 	}
-	g_addrMap.insert(AddrMapType(info.ptr, info));
+	g_addrMap.insert(AddrMapType(info.logInfo.ptr, info));
 }
 
-void addx_addr(MemLogInfo & info)
+void addx_addr(MemLogInfoEx & info)
 {
 	AddrMapIter iter;
-	iter = g_addrMap.find(info.ptr);
+	iter = g_addrMap.find(info.logInfo.ptr);
 	if (iter != g_addrMap.end())
 	{
 		g_addrMap.erase(iter);
 	}
-	iter = g_addrMap.find(info.ptrx);
+	iter = g_addrMap.find(info.logInfo.ptrx);
 	if (iter != g_addrMap.end())
 	{
 		g_addrMap.erase(iter);
 	}
-	g_addrMap.insert(AddrMapType(info.ptr, info));
+	g_addrMap.insert(AddrMapType(info.logInfo.ptr, info));
 }
 
-void del_addr(MemLogInfo & info)
+void del_addr(MemLogInfoEx & info)
 {
 	AddrMapIter iter;
-	iter = g_addrMap.find(info.ptr);
+	iter = g_addrMap.find(info.logInfo.ptr);
 	if (iter != g_addrMap.end())
 	{
 		g_addrMap.erase(iter);
@@ -208,7 +211,8 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 	//infof("46885 g_addrMap size is %d\n",g_addrMap.size())
 	for (AddrMapIter iter = g_addrMap.begin(); iter != g_addrMap.end(); iter++)
 	{
-		MemLogInfo &info = iter->second;
+		MemLogInfoEx &infoEx = iter->second;
+		MemLogInfo &info = infoEx.logInfo;
 		total += info.size;
 		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\t\n",
 			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr));
@@ -219,7 +223,7 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 			memset(szSPAddr, 0, sizeof(szSPAddr));
 			for (int i = 0; i < info.dep; i++)
 			{
-				void * p = (void *)(info.spinfo[i]);
+				void * p = (void *)(infoEx.spinfo[i]);
 				len = sprintf(szSPAddr + offset, "\t%p", p);
 				// if (p)
 				// {
@@ -249,7 +253,7 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 				{
 					printf("\n");
 				}
-				void * p = (void *)(info.spinfo[i]);
+				void * p = (void *)(infoEx.spinfo[i]);
 				printf("\t%p", p);
 				// if (p)
 				// {
@@ -442,10 +446,11 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 		size_t len = 0;
 		size_t lenLeft = 0;
 		size_t spInfoLen = 0;
-		MemLogInfo info;
+		MemLogInfoEx infoEx;
+		MemLogInfo &info = infoEx.logInfo;
 		do
 		{
-			memset(&info, 0, sizeof(info));
+			memset(&infoEx, 0, sizeof(infoEx));
 			len = fread(&info, 1, ONE_BUF_SIZE_FREE, file);
 			if (ONE_BUF_SIZE_FREE == len) 
 			{
@@ -488,7 +493,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					}
 					if (info.dep > 0)
 					{
-						spInfoLen = fread(info.spinfo, 1, info.dep, file);
+						spInfoLen = fread(infoEx.spinfo, 1, info.dep, file);
 						if (info.dep != spInfoLen) 
 						{
 							printf("error spInfoLen[%lu]\n", spInfoLen);
@@ -499,18 +504,18 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					
 					if (info.type >= MEMOP_MALLOC && info.type != MEMOP_REALLOC)
 					{
-						add_addr(info);
+						add_addr(infoEx);
 						g_addNum++;
 					}
 					else if(info.type == MEMOP_REALLOC)
 					{
-						addx_addr(info);
+						addx_addr(infoEx);
 						g_deladdNum++;
 						g_addNum++;
 					}
 					else
 					{
-						del_addr(info);
+						del_addr(infoEx);
 						g_delNum++;
 					}
 					g_itemNum++;

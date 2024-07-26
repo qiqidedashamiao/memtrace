@@ -41,3 +41,6 @@ clean:
 	
 share:
 	$(CPP) -shared -fpic -o libpreload.so memTraceDy.cpp -g -std=c++11
+
+test:
+	g++ -o sonia test.cpp -g --std=c++11 -lpthread -ldl

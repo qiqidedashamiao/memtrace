@@ -7,7 +7,7 @@ AR  = $(CROSS)ar
 RM	= rm -f
 STRIP	= $(CROSS)strip
 
-MEMTRACE_SRCPATH = ./Src
+MEMTRACE_SRCPATH = ./
 MEMTRACE_LIBPATH = ./
 OBJ_PATH = ./Obj
 BIN_PATH = ./
@@ -29,7 +29,7 @@ pre:
 
 mem_log_parse: clean_server pre
 	@echo "make server"
-	g++ -o $(OBJ_PATH)/mem_log_parse.o -c $(MEMTRACE_SRCPATH)/mem_log_parse.cpp
+	g++ -o $(OBJ_PATH)/mem_log_parse.o -c $(MEMTRACE_SRCPATH)/Parse.cpp
 	g++ -o $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o $(APP_LDFLAGS)
 
 clean_server:

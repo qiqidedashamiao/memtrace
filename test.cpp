@@ -32,6 +32,7 @@ void allocateAndFreeMemory(int threadId) {
         for (int i = 0; i < size; i++) {
             buffer[i] = i;
         }
+        //foo();
 
             // 模拟一些处理时间
             std::this_thread::sleep_for(std::chrono::milliseconds(5000));
@@ -141,7 +142,7 @@ end:
 int main(int argc, char** argv) {
 
 
-    foo();
+    //foo();
     //test();
     return 0;
     const int numThreads = 1; // 线程数量
