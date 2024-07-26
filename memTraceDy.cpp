@@ -156,7 +156,7 @@ void printMap(int pid)
 	time_t tt;
 	time(&tt);
 	localtime_r(&tt, &t);
-	int len = sprintf(name, "%s/maps-%04d%02d%02d_%02d%02d%02d.txt", pathMap, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+	int len = sprintf(name, "%s/maps-%04d%02d%02d_%02d%02d%02d-%d.txt", pathMap, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, pid);
 	name[len] = '\0';
 	FILE *stream;
 	char cmd[128] = {0};
@@ -340,6 +340,43 @@ void ReadParam(int &isStart , int & trace, size_t traceSize, int &traceTid)
 	return;
 }
 
+void updateParam()
+{
+	int lastswitch = 0;
+	int traceTid = 0;
+	size_t traceSize = 0u;
+	int trace = 0;
+	ReadParam(lastswitch, traceTid, traceSize, trace);
+	if (lastswitch != g_lastswitch)
+	{
+		// g_lastswitch = lastswitch;
+		__sync_bool_compare_and_swap(&g_lastswitch, g_lastswitch, lastswitch);
+		fprintf(stdout, "[%s:%d]--g_lastswitch:%d--.\n", __FUNCTION__, __LINE__, g_lastswitch);
+		if (lastswitch == 0)
+		{
+			// 保存文件
+			pthread_mutex_lock(&mwGlobalMutexMemTrace);
+			SaveTraceInfo(LOGFILEOP_CLOSE, NULL, 0);
+			pthread_mutex_unlock(&mwGlobalMutexMemTrace);
+		}
+	}
+	if (traceTid != g_traceTid)
+	{
+		// g_traceTid = traceTid;
+		__sync_bool_compare_and_swap(&g_traceTid, g_traceTid, traceTid);
+	}
+	if (traceSize != g_traceSize)
+	{
+		// g_traceSize = traceSize;
+		__sync_bool_compare_and_swap(&g_traceSize, g_traceSize, traceSize);
+	}
+	if (trace != g_trace)
+	{
+		// g_trace = trace;
+		__sync_bool_compare_and_swap(&g_trace, g_trace, trace);
+	}
+}
+
 /**
  * purpose: 读取memtrace_param参数线程，更新是否开启内存跟踪，是否跟踪栈信息，跟踪申请的内存大小，跟踪线程id等参数信息
 */
@@ -453,6 +490,7 @@ void _main(int argc, char** argv)
 					&& pName[i+4] == 'a')
 					{
 						MemTraceInit();
+						updateParam();
 						s_init = 1;
 						fprintf(stdout,"zl: s_init:%d\n",s_init);
 						//createThread(getpid());
@@ -473,7 +511,7 @@ void MemTraceInit()
 {
 	fprintf(stdout,"[%s:%d] MemTraceInit 1.\n", __FUNCTION__, __LINE__);
 	int ret = 0;
-	printMap(getpid());
+	//printMap(getpid());
 	//ret = pthread_mutex_init(&mwGlobalMutexMemTrace, NULL);
 	fprintf(stdout,"[%s:%d] MemTraceInit 2. ret: %d.\n", __FUNCTION__, __LINE__, ret);
 }
@@ -520,9 +558,9 @@ void SaveTraceInfo(int optype, void * buf, int len)
 		time_t tt;
 		time(&tt);
 		localtime_r(&tt, &t);
-		sprintf(name, "%s/memery-%04d%02d%02d_%02d%02d%02d-%u.log", pathList
-			, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec
-			, no);
+		sprintf(name, "%s/memery-%04d%02d%02d_%02d%02d%02d-%d-%u.log", pathList
+			, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
+			getpid(), no);
 		//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 4\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 		g_file = fopen(name, "a");
 		//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 5\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));

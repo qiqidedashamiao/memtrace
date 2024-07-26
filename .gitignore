@@ -3,8 +3,8 @@ a.out
 .vscode/*
 libpreload.so
 param
-.list/*
-.map/*
+list/*
+map/*
 sonia
 memtrace.7z
 sonia

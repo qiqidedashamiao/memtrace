@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <unistd.h>
 
+using namespace std;
+
 // 用于控制线程停止的全局标志和条件变量
 std::atomic<bool> running(true);
 std::condition_variable cv;
@@ -35,7 +37,7 @@ void allocateAndFreeMemory(int threadId) {
         //foo();
 
             // 模拟一些处理时间
-            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         std::cout << "线程 " << threadId << " 开始释放内存" << std::endl;
         // 释放内存
@@ -84,9 +86,11 @@ void foo() {
 void monitorInput() {
     int input;
     //foo();
-    while (true) {
+    while (true)
+    {
         std::cin >> input;
-        if (input == 0) {
+        if (input == 0)
+        {
             {
                 std::lock_guard<std::mutex> lk(cv_m);
                 running = false;
@@ -142,11 +146,14 @@ end:
 int main(int argc, char** argv) {
 
 
+    cout << "main start" << endl;
     //foo();
     //test();
-    return 0;
+    //return 0;
     const int numThreads = 1; // 线程数量
     std::vector<std::thread> threads;
+
+    cout << "main create thread" << endl;
 
     // 创建线程
     for (int i = 0; i < numThreads; ++i) {
@@ -166,6 +173,9 @@ int main(int argc, char** argv) {
     if (inputThread.joinable()) {
         inputThread.join();
     }
+    //int end = 0;
+    //cin >> end;
+    //cout << "main end" << endl;
 
     return 0;
 }
