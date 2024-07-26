@@ -40,4 +40,4 @@ clean:
 	$(RM) $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o ./a.out $(MEMTRACE_LIBPATH)/*.so $(MEMTRACE_SRCPATH)/*.o
 	
 share:
-	$(CPP) -shared -fpic -o libpreload.so memtraceDy.cpp -g -std=c++11
+	$(CPP) -shared -fpic -o libpreload.so memTraceDy.cpp -g -std=c++11
