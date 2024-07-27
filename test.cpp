@@ -37,7 +37,7 @@ void allocateAndFreeMemory(int threadId) {
         //foo();
 
             // 模拟一些处理时间
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
         std::cout << "线程 " << threadId << " 开始释放内存" << std::endl;
         // 释放内存
@@ -45,7 +45,7 @@ void allocateAndFreeMemory(int threadId) {
         std::cout << "线程 " << threadId << " 释放了内存" << std::endl;
 
         // 模拟一些处理时间
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     }
     std::cout << "线程 " << threadId << " 结束" << std::endl;
 }
@@ -159,9 +159,12 @@ int main(int argc, char** argv) {
     for (int i = 0; i < numThreads; ++i) {
         threads.push_back(std::thread(allocateAndFreeMemory, i));
     }
-
+    
+    cout << "main create thread end" << endl;
     // 创建监控输入的线程
     std::thread inputThread(monitorInput);
+    
+    cout << "main create monitor thread end" << endl;
 
     // 等待所有线程完成
     for (auto& t : threads) {

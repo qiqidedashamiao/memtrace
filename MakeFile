@@ -43,4 +43,4 @@ share:
 	$(CPP) -shared -fpic -o libpreload.so memTraceDy.cpp -g -std=c++11
 
 test:
-	g++ -o sonia test.cpp -g --std=c++11 -lpthread -ldl
+	g++ -shared -fpic -g -o libpreload.so memTraceDy.cpp --std=c++11 -lpthread -ldl -DUSE_DEP=10

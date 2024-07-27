@@ -122,10 +122,10 @@ static int s_init = 0;
 
 static unsigned int starttime = 0;
 static unsigned int g_lasttime = 0;
-static int8_t g_lastswitch = 0;
+static int g_lastswitch = 0;
 static int g_traceTid = 0;
 static size_t g_traceSize = 0u;
-static int8_t g_trace = 0;
+static int g_trace = 0;
 static FILE * g_file = NULL;
 pthread_t thread_id;
 
@@ -252,7 +252,7 @@ void* writeFunction(void* arg)
 /**
  * purpose: 读取memtrace_param文件，获取是否开启内存跟踪，是否跟踪栈信息，跟踪申请的内存大小，跟踪线程id
 */
-void ReadParam(int &isStart , int & trace, size_t traceSize, int &traceTid)
+void ReadParam(int &isStart , int & trace, int &traceTid, size_t traceSize)
 {
 	isStart = 0;
 	traceTid = 0;
@@ -346,7 +346,7 @@ void updateParam()
 	int traceTid = 0;
 	size_t traceSize = 0u;
 	int trace = 0;
-	ReadParam(lastswitch, traceTid, traceSize, trace);
+	ReadParam(lastswitch, trace, traceTid, traceSize);
 	if (lastswitch != g_lastswitch)
 	{
 		// g_lastswitch = lastswitch;
@@ -391,7 +391,7 @@ void* threadFunction(void* arg) {
 		int traceTid = 0;
 		size_t traceSize = 0u;
 		int trace = 0;
-		ReadParam(lastswitch, traceTid, traceSize, trace);
+		ReadParam(lastswitch, trace, traceTid, traceSize);
 		if (lastswitch != g_lastswitch)
 		{
 			//g_lastswitch = lastswitch;
@@ -493,7 +493,7 @@ void _main(int argc, char** argv)
 						updateParam();
 						s_init = 1;
 						fprintf(stdout,"zl: s_init:%d\n",s_init);
-						//createThread(getpid());
+						createThread(getpid());
 						break;
 					}
 				}
@@ -550,7 +550,7 @@ void SaveTraceInfo(int optype, void * buf, int len)
 			g_file = NULL;
 		}
 	}
-	//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+	fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 	if (NULL == g_file)
 	{
 		char name[128];
@@ -730,7 +730,7 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 	MemLogInfo &logInfo = logInfoEx.logInfo;
 	unsigned int currtime = (unsigned int)tt;
 	logInfo.currtime = currtime;
-	//fprintf(stdout,"[%s:%d][tid:%d]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
+	fprintf(stdout,"[%s:%d][tid:%d]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
 
 	unsigned int tid = syscall(SYS_gettid);
 	logInfo.tid = tid;
@@ -739,7 +739,7 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 	// 	return;
 	// }
 	
-	//fprintf(stdout,"[%s:%d][tid:%d]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
+	fprintf(stdout,"[%s:%d][tid:%d]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
 
 	//printStackTrace();
 
@@ -835,9 +835,10 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
 	{\
+		fprintf(stdout,"[%s:%d]gst_in_malloc:%d\n", __FUNCTION__, __LINE__, gst_in_malloc);\
 		if (gst_in_malloc != 0)\
 		{\
-			return (void*)__libc_malloc(sizeParam);\
+			return ptrParam;\
 		}\
 		gst_in_malloc = 1;\
 		MemLogInfoEx logInfoEx;\
@@ -846,13 +847,16 @@ size_t getMallocSize(void *ptr)
 		logInfo.ptr = ptrParam;\
 		logInfo.ptrlr = __builtin_return_address(0);\
 		logInfo.size = sizeParam;\
+		fprintf(stdout,"[%s:%d]gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gst_in_malloc);\
 		logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP);\
+		fprintf(stdout,"[%s:%d]gst_in_malloc1:%d\n", __FUNCTION__, __LINE__, gst_in_malloc);\
 		for (int i = 0; i < logInfo.dep; i++)\
 		{\
 			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfoEx.spinfo);\
 		}\
 		stacktrace(logInfoEx);\
 		gst_in_malloc = 0;\
+		fprintf(stdout,"[%s:%d]gst_in_malloc2:%d\n", __FUNCTION__, __LINE__, gst_in_malloc);\
 	}\
 }
 
@@ -860,6 +864,11 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
 	{\
+		if (gst_in_malloc != 0)\
+		{\
+			return ptrParam;\
+		}\
+		gst_in_malloc = 1;\
 		MemLogInfoEx logInfoEx;\
 		MemLogInfo &logInfo = logInfoEx.logInfo;\
 		logInfo.type = typeParam;\
@@ -872,6 +881,7 @@ size_t getMallocSize(void *ptr)
 			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfoEx.spinfo[i]);\
 		}\
 		stacktrace(logInfoEx);\
+		gst_in_malloc = 0;\
 	}\
 }
 
@@ -879,6 +889,11 @@ size_t getMallocSize(void *ptr)
 {\
 	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize) && ptrParam != ptrxParam)\
 	{\
+		if (gst_in_malloc != 0)\
+		{\
+			return ptrParam;\
+		}\
+		gst_in_malloc = 1;\
 		MemLogInfoEx logInfoEx;\
 		MemLogInfo &logInfo = logInfoEx.logInfo;\
 		logInfo.type = typeParam;\
@@ -892,6 +907,7 @@ size_t getMallocSize(void *ptr)
 			fprintf(stdout,"[%s:%d] address %d: %p\n", __FUNCTION__, __LINE__, i, logInfoEx.spinfo[i]);\
 		}\
 		stacktrace(logInfoEx);\
+		gst_in_malloc = 0;\
 	}\
 }
 
