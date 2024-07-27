@@ -476,7 +476,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 						lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_MALLOC, 1, ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC, file);
 						if (ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC != lenLeft) 
 						{
-							printf("error spInfoLen[%lu]\n", lenLeft);
+							printf("error type[%x] spInfoLen[%lu]\n", info.type, lenLeft);
 							g_errorItemNum2++;
 							break;
 						}
@@ -493,12 +493,21 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					}
 					if (info.dep > 0)
 					{
-						spInfoLen = fread(infoEx.spinfo, 1, info.dep, file);
+						spInfoLen = fread(infoEx.spinfo, 1, info.dep * sizeof(void *), file);
 						if (info.dep != spInfoLen) 
 						{
 							printf("error spInfoLen[%lu]\n", spInfoLen);
 							g_errorItemNum2++;
 							break;
+						}
+						if (logDetail)
+						{
+							printf("spinfo:\n");
+							for (int i = 0; i < info.dep; ++i)
+							{
+								printf("\t%p", infoEx.spinfo[i]);
+							}
+							printf("\n");
 						}
 					}
 					
@@ -522,7 +531,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 				}
 				else
 				{
-					printf("error info.type[%d]\n", info.type);
+					printf("error info.type[%x]\n", info.type);
 					g_errorItemNum1++;
 				}
 			}
