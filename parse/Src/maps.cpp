@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <stdlib.h>
 #include <iostream>
+#include <unistd.h>
 
 #include "maps.h"
 
@@ -45,13 +46,22 @@ Maps::Maps(const char * mapsPath, const char * execPath, const char* preCmd, boo
 
 bool Maps::findMemoryRegion(void *address, MemoryRegion &region) {
         auto it = m_mapMemoryRegions.lower_bound(address);
+        
+
         if (it != m_mapMemoryRegions.end() && it->second.start <= address && it->second.end >= address) {
             region = it->second;
             if (!m_bASLR)
             {
                 region.start = 0;
             }
-            return true;
+            // 判断文件是否存在
+            string name = m_execPath + region.execName;
+            if (access(name.c_str(), F_OK) == 0)
+            {
+                return true;
+            }
+
+            return false;
         }
         return false;
     }
@@ -64,15 +74,16 @@ void Maps::addr2symbol(void * addr)
     {
         FILE * stream;
         char cmd[10240];
-        
+
+        unsigned long long offset = (unsigned long long)addr - (unsigned long long)region.start;
         //sprintf(cmd, "csky-abiv2-ux-linuxv3615-addr2line -a -e %s -f -C %p", soniaPath, addr);
         //sprintf(cmd, "aarch64-himix210-linux-sd3403v100-v1-addr2line -a -e %s -f -C %p", soniaPath, addr);
-        sprintf(cmd, "%saddr2line -a -e %s%s -f -C %p", m_preCmd.c_str(), m_execPath.c_str(), region.execName.c_str(), (int *)addr - (int *)region.start);
-        printf("cmd %s\n", cmd);
+        sprintf(cmd, "%saddr2line -a -e %s%s -f -C %p", m_preCmd.c_str(), m_execPath.c_str(), region.execName.c_str(), offset);
+        //printf("cmd %s\n", cmd);
         stream = popen(cmd, "r");
         fread(symbolBuf, sizeof(char), sizeof(symbolBuf), stream);
         pclose(stream);
-        printf("%s\n", symbolBuf);
+        printf("%s", symbolBuf);
     }
     else
     {

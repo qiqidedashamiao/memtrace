@@ -130,9 +130,9 @@ int main(int argc, char** argv) {
 
 
     cout << "[tid:" << gettid() << "]" << "main start" << endl;
-    foo();
+    //foo();
     //test();
-    return 0;
+    //return 0;
     const int numThreads = 5; // 线程数量
     std::vector<std::thread> threads;
 

@@ -34,7 +34,7 @@ typedef enum ENUM_MEMOPTYPE
 }ENUM_MEMOPTYPE;
 
 const int STACK_DEP = 30;
-const int BITLEN = sizeof(void *);
+const int BITLEN = 8;
 
 //64位大小位20 
 // typedef struct __attribute__((packed)) MemLogInfo {
@@ -74,9 +74,9 @@ typedef struct MemLogInfo {
 	void *spinfo[STACK_DEP];
 } MemLogInfo;
 
-const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) -  sizeof(void *) * 2;  //20
-const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) -  sizeof(void *) ;   //28
-const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo);  //36
+const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfoPacked) -  sizeof(void *) * 3;  //20
+//const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) -  sizeof(void *) - STACK_DEP * sizeof(void *);   //28
+//const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo)- STACK_DEP * sizeof(void *);  //36
 
 void output_info(const char * soniaPath, int isAddr2Symbol);
 void parse_logfile(const     char * name, int isAddr2Symbol, int logDetail = 0, int isFullPath = 0);
@@ -105,10 +105,11 @@ unsigned long int g_itemNum = 0llu;
 unsigned long int g_errorItemNum1 = 0llu;
 unsigned long int g_errorItemNum2 = 0llu;
 
+Maps g_maps("../map/maps-20240729_062737-15080.tx", "../", "", 0);
 
 int main(int argc, char * argv[])
 {
-	//Maps maps("../map/maps-20240728_152240-13680.tx", "../", "", 1);
+	
 	//void * addr = (void *)0x401918;
 	//maps.addr2symbol(addr);
 	//return 0;
@@ -266,9 +267,15 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 			}
 			szSPAddr[offset] = 0;
 			//printf("ok.\n");
-			addrstr2symbol(soniaPath, szSPAddr, symbolBuf, sizeof(symbolBuf));
+			//addrstr2symbol(soniaPath, szSPAddr, symbolBuf, sizeof(symbolBuf));
 			printf("addrlist:%s\n", szSPAddr);
-			printf("%s\n", symbolBuf);
+			//printf("%s\n", symbolBuf);
+			for (int i = 0; i < info.dep; i++)
+			{
+				//void * p = (void *)(info.spinfo[i]);
+				g_maps.addr2symbol(info.spinfo[i]);
+			}
+			printf("\n");
 		}
 		else
 		{
@@ -327,8 +334,9 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 		total = iter->second;
 		printf("LR[%p]\t total: %u[B]\t = %u[KB]\t = %u[MB]\n", (void *)(iter->first), total, (total >> 10), (total >> 20));
 		memset(symbolBuf, '\0', sizeof(symbolBuf));
-		addr2symbol(soniaPath, (void *)(iter->first), symbolBuf, sizeof(symbolBuf));
-		printf("\t\t\t\t %s\n", symbolBuf);
+		//addr2symbol(soniaPath, (void *)(iter->first), symbolBuf, sizeof(symbolBuf));
+		g_maps.addr2symbol((void *)(iter->first));
+		//printf("\t\t\t\t %s\n", symbolBuf);
 	}
 
 }
@@ -492,33 +500,58 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 			len = fread(&info, 1, ONE_BUF_SIZE_FREE, file);
 			if (ONE_BUF_SIZE_FREE == len) 
 			{
+				lenLeft = fread(&info.ptr, 1, BITLEN, file);
+				if (BITLEN != lenLeft) 
+				{
+					printf("error ptr[%lu]\n", lenLeft);
+					g_errorItemNum2++;
+					break;
+				}
+
 				int dep = 0;
 				if (info.type >= MEMOP_FREE && info.type < MEMOP_STRDUP)
 				{
-					if (info.type >= MEMOP_MALLOC && info.type != MEMOP_REALLOC)
+					if (info.type >= MEMOP_MALLOC)
 					{
-						lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_FREE, 1, ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE, file);
-						if (ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE != lenLeft) 
+						lenLeft = fread(&info.ptrlr, 1, BITLEN, file);
+						if (BITLEN != lenLeft) 
 						{
-							printf("error spInfoLen[%lu]\n", lenLeft);
+							printf("error type[%x] ptrlr[%lu]\n", info.type, lenLeft);
 							g_errorItemNum2++;
 							break;
 						}
+						//lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_FREE, 1, ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE, file);
+						// if (ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE != lenLeft) 
+						// {
+						// 	printf("error spInfoLen[%lu]\n", lenLeft);
+						// 	g_errorItemNum2++;
+						// 	break;
+						// }
 						infoEx.spinfo[0] = info.ptrlr;
 						dep = 1;
-					}
-					else if(info.type == MEMOP_REALLOC)
-					{
-						lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_MALLOC, 1, ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC, file);
-						if (ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC != lenLeft) 
+						if (info.type == MEMOP_REALLOC)
 						{
-							printf("error type[%x] spInfoLen[%lu]\n", info.type, lenLeft);
-							g_errorItemNum2++;
-							break;
+							lenLeft = fread(&info.ptrx, 1, BITLEN, file);
+							if (BITLEN != lenLeft) 
+							{
+								printf("error type[%x] ptrx[%lu]\n", info.type, lenLeft);
+								g_errorItemNum2++;
+								break;
+							}
 						}
-						infoEx.spinfo[0] = info.ptrlr;
-						dep = 1;
 					}
+					// else if(info.type == MEMOP_REALLOC)
+					// {
+					// 	lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_MALLOC, 1, ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC, file);
+					// 	if (ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC != lenLeft) 
+					// 	{
+					// 		printf("error type[%x] spInfoLen[%lu]\n", info.type, lenLeft);
+					// 		g_errorItemNum2++;
+					// 		break;
+					// 	}
+					// 	infoEx.spinfo[0] = info.ptrlr;
+					// 	dep = 1;
+					// }
 					else
 					{
 						// spInfoLen = fread(info.spinfo, 1, ONE_SPINFO_SIZE, file);
@@ -538,13 +571,28 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					}
 					if (info.dep > 0)
 					{
-						spInfoLen = fread(infoEx.spinfo+1, 1, info.dep * sizeof(void *), file);
-						if (info.dep * sizeof(void *) != spInfoLen) 
+						int i = 1;
+						for (i = 1; i <= info.dep; ++i)
 						{
-							printf("error spInfoLen[%lu]\n", spInfoLen);
-							g_errorItemNum2++;
+							spInfoLen = fread(infoEx.spinfo + i, 1, BITLEN, file);
+							if (BITLEN != spInfoLen) 
+							{
+								printf("error spInfoLen[%lu]\n", spInfoLen);
+								g_errorItemNum2++;
+								break;
+							}
+						}
+						if (i <= info.dep)
+						{
 							break;
 						}
+						//spInfoLen = fread(infoEx.spinfo + 1, 1, info.dep * sizeof(void *), file);
+						// if (info.dep * sizeof(void *) != spInfoLen) 
+						// {
+						// 	printf("error spInfoLen[%lu]\n", spInfoLen);
+						// 	g_errorItemNum2++;
+						// 	break;
+						// }
 					}
 
 					if (logDetail)
