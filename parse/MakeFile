@@ -7,10 +7,10 @@ AR  = $(CROSS)ar
 RM	= rm -f
 STRIP	= $(CROSS)strip
 
-MEMTRACE_SRCPATH = ./
-MEMTRACE_LIBPATH = ./
+MEMTRACE_SRCPATH = ./Src
+MEMTRACE_LIBPATH = .
 OBJ_PATH = ./Obj
-BIN_PATH = ./
+BIN_PATH = .
 
 CFLAGS += -I./Include 
 CFLAGS += -Wall -O2 -Os -g -ansi
@@ -29,8 +29,10 @@ pre:
 
 mem_log_parse: clean_server pre
 	@echo "make server"
-	g++ -o $(OBJ_PATH)/mem_log_parse.o -c $(MEMTRACE_SRCPATH)/Parse.cpp
-	g++ -o $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o $(APP_LDFLAGS)
+	#g++ -o $(OBJ_PATH)/mem_log_parse.o -c $(MEMTRACE_SRCPATH)/Parse.cpp -g
+	#g++ -o $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o $(APP_LDFLAGS) -g
+	#g++ -o $(BIN_PATH)/mem_log_parse $(MEMTRACE_SRCPATH)/Parse.cpp -g
+	g++ -o $(BIN_PATH)/mem_log_parse $(MEMTRACE_SRCPATH)/Parse.cpp $(MEMTRACE_SRCPATH)/maps.cpp  -g --std=c++11
 
 clean_server:
 	$(RM) $(BIN_PATH)/server $(OBJ_PATH)/mem_log_parse.o

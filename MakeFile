@@ -22,6 +22,16 @@ CFLAGS += -D_REENTRANT -msoft-float
 APP_LDFLAGS += -Wl,-rpath,./
 APP_LDFLAGS += -lpthread -lc -lrt -ldl
 
+TEST_LDFLAGS += -O2
+#优化FP寄存器，默认开启
+TEST_LDFLAGS += -fomit-frame-pointer  
+TEST_LDFLAGS += -rdynamic
+#做backtrace最方便的就是使用gcc自带的backtrace功能，编译的时候加上-funwind-tables选项（该选项对性能无影响但是会使可执行文件略微变大），异常处理函数中调用相关函数即可输出函数调用栈，但是这依赖于你所用的编译工具链是否支持
+#TEST_LDFLAGS += -funwind-tables
+TEST_LDFLAGS += -g
+#开启地址空间布局随机化（ASLR）
+TEST_LDFLAGS += -fPIE -pie
+
 
 all: share
 
@@ -43,4 +53,4 @@ share:
 	g++ -shared -fpic -g -o libpreload.so memTraceDy.cpp --std=c++11 -lpthread -ldl -DUSE_DEP=10
 
 test:
-	g++ -o sonia test.cpp -g --std=c++11 -lpthread -ldl
+	g++ -o sonia test.cpp --std=c++11 -lpthread -ldl $(TEST_LDFLAGS)
