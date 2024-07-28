@@ -133,6 +133,7 @@ static unsigned int g_lasttime = 0;
 static int g_lastswitch = 0;
 static int g_traceTid = 0;
 static size_t g_traceSize = 0u;
+static size_t g_bigSize = 0u;
 static int g_trace = 0;
 static FILE * g_file = NULL;
 pthread_t thread_id;
@@ -260,12 +261,13 @@ void* writeFunction(void* arg)
 /**
  * purpose: 读取memtrace_param文件，获取是否开启内存跟踪，是否跟踪栈信息，跟踪申请的内存大小，跟踪线程id
 */
-void ReadParam(int &isStart , int & trace, int &traceTid, size_t traceSize)
+void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, size_t &bigSize)
 {
 	isStart = 0;
 	traceTid = 0;
 	traceSize = 0u;
 	trace = 0;
+	bigSize = 0;
 	FILE * file = NULL;
 	file = fopen(pathParam, "r");
 	if(file != NULL)
@@ -279,7 +281,7 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t traceSize)
 			//isCheck = atoi(buf);
 			//0:off/1:on tid size
 			//fprintf(stdout,"46885 start change memtrace_param\n");
-			sscanf(buf, "%d %d %d %d", &isStart, &trace, &traceSize, &traceTid);
+			sscanf(buf, "%d %d %d %d", &isStart, &trace, &traceSize, &traceTid, &bigSize);
 		}
 		fclose(file);
 		file = NULL;
@@ -353,8 +355,9 @@ void updateParam()
 	int lastswitch = 0;
 	int traceTid = 0;
 	size_t traceSize = 0u;
+	size_t bigSize = 0u;
 	int trace = 0;
-	ReadParam(lastswitch, trace, traceTid, traceSize);
+	ReadParam(lastswitch, trace, traceTid, traceSize, bigSize);
 	if (lastswitch != g_lastswitch)
 	{
 		// g_lastswitch = lastswitch;
@@ -386,6 +389,11 @@ void updateParam()
 	{
 		// g_trace = trace;
 		__sync_bool_compare_and_swap(&g_trace, g_trace, trace);
+	}
+	if (bigSize != g_bigSize)
+	{
+		// g_traceSize = traceSize;
+		__sync_bool_compare_and_swap(&g_bigSize, g_bigSize, bigSize);
 	}
 }
 
