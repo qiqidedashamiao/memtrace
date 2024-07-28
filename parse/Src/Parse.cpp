@@ -108,10 +108,10 @@ unsigned long int g_errorItemNum2 = 0llu;
 
 int main(int argc, char * argv[])
 {
-	Maps maps("../map/maps-20240728_152240-13680.tx", "../", "", 1);
-	void * addr = (void *)0x401918;
-	maps.addr2symbol(addr);
-	return 0;
+	//Maps maps("../map/maps-20240728_152240-13680.tx", "../", "", 1);
+	//void * addr = (void *)0x401918;
+	//maps.addr2symbol(addr);
+	//return 0;
 	printf("hello argc: %d\n", argc);
 	for (int i = 1; i < argc; i++)
 	{
