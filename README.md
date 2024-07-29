@@ -1,3 +1,4 @@
+ls ../list/memery-*.log > list.txt
 find ~ -name memery*.log > parse/list.txt
 parse/mem_log_parse 0 parse/list.txt 0 0 1 ./sonia > parse/parselog.txt
 
@@ -9,10 +10,11 @@ parse/mem_log_parse 0 parse/list.txt 0 0 1 ./sonia > parse/parselog.txt
 5  是否是全路径
 6  可执行文件地址
 
-echo "1 1 0 0" > param
-echo "0 0 0 0" > param
+echo "1 1 0 0 2048" > param
+echo "0 0 0 0 0" > param
 
 export LD_PRELOAD=/root/mount/share/memtrace/libpreload.so
+#export LD_PRELOAD=/home/234646/tools/git/workspace/memtrace/libpreload.so
 export -n LD_PRELOAD
 
 

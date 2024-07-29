@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <map>
+#include <vector>
 
 #include "maps.h"
 
@@ -19,6 +20,7 @@ const int ONE_ROW_SP_ITEM = (64);
 
 
 //内存申请释放类型
+
 typedef enum ENUM_MEMOPTYPE
 {
 	MEMOP_FREE = 0,
@@ -30,7 +32,14 @@ typedef enum ENUM_MEMOPTYPE
 	MEMOP_NEW_NOTHROW = 6,
 	MEMOP_NEW_ARRAY = 7,
 	MEMOP_REALLOC = 8,
-	MEMOP_STRDUP = 9,
+	MEMOP_MALLOC_BIG = 9,
+	MEMOP_CALLOC_BIG = 10,
+	MEMOP_NEW_BIG = 11,
+	MEMOP_NEW_NOTHROW_BIG = 12,
+	MEMOP_NEW_ARRAY_BIG = 13,
+	MEMOP_REALLOC_BIG = 14,
+	MEMOP_MAX = 15,
+	//MEMOP_STRDUP = 16,
 }ENUM_MEMOPTYPE;
 
 const int STACK_DEP = 30;
@@ -97,6 +106,8 @@ typedef std::map<void *, unsigned int>::value_type LRStatMapType;
 typedef std::map<void *, unsigned int>::iterator LRStatMapIter;
 
 AddrMap g_addrMap;
+
+std::vector<MemLogInfo> g_bigMemoryArray;
 
 unsigned long int g_addNum = 0llu;
 unsigned long int g_delNum = 0llu;
@@ -166,6 +177,11 @@ void add_addr(MemLogInfo & info)
 		g_addrMap.erase(iter);
 	}
 	g_addrMap.insert(AddrMapType(info.ptr, info));
+}
+
+void add_bigMemory(MemLogInfo & info)
+{
+	g_bigMemoryArray.push_back(info);
 }
 
 void addx_addr(MemLogInfo & info)
@@ -339,6 +355,70 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 		//printf("\t\t\t\t %s\n", symbolBuf);
 	}
 
+	for (auto &info: g_bigMemoryArray)
+	{
+		info.ptr = 0;
+		info.ptrx = 0;
+		printf("BigSize:\t%lu\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%p\t\n",
+			(info.size), (info.currtime), (info.type), (info.tid), (void*)(info.ptrlr));
+
+		if (isAddr2Symbol)
+		{
+			offset = 0;
+			memset(szSPAddr, 0, sizeof(szSPAddr));
+			for (int i = 0; i < info.dep; i++)
+			{
+				void * p = (void *)(info.spinfo[i]);
+				len = sprintf(szSPAddr + offset, "\t%p", p);
+				// if (p)
+				// {
+				// 	len = sprintf(szSPAddr + offset, "\t%p", p);
+				// }
+				// else
+				// {
+				// 	len = sprintf(szSPAddr + offset, "\t0x0");
+				// }
+				if (len > 0)
+				{
+					offset += len;
+				}
+				//printf("i: %d, offset :%d, len :%d\n", i, offset, len);
+			}
+			szSPAddr[offset] = 0;
+			//printf("ok.\n");
+			//addrstr2symbol(soniaPath, szSPAddr, symbolBuf, sizeof(symbolBuf));
+			printf("addrlist:%s\n", szSPAddr);
+			//printf("%s\n", symbolBuf);
+			for (int i = 0; i < info.dep; i++)
+			{
+				//void * p = (void *)(info.spinfo[i]);
+				g_maps.addr2symbol(info.spinfo[i]);
+			}
+			printf("\n");
+		}
+		else
+		{
+			for (int i = 0; i < info.dep; i++)
+			{
+				if (!(i%ONE_ROW_SP_ITEM))
+				{
+					printf("\n");
+				}
+				void * p = (void *)(info.spinfo[i]);
+				printf("\t%p", p);
+				// if (p)
+				// {
+				// 	printf("\t%p", p);
+				// }
+				// else
+				// {
+				// 	printf("\t0x0");
+				// }
+			}
+			printf("\n");
+		}
+	}
+
 }
 
 void get_spfile(const char * name, int isFullPath, const char * soniaPath)
@@ -509,7 +589,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 				}
 
 				int dep = 0;
-				if (info.type >= MEMOP_FREE && info.type < MEMOP_STRDUP)
+				if (info.type >= MEMOP_FREE && info.type < MEMOP_MAX)
 				{
 					if (info.type >= MEMOP_MALLOC)
 					{
@@ -529,7 +609,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 						// }
 						infoEx.spinfo[0] = info.ptrlr;
 						dep = 1;
-						if (info.type == MEMOP_REALLOC)
+						if (info.type >= MEMOP_REALLOC)
 						{
 							lenLeft = fread(&info.ptrx, 1, BITLEN, file);
 							if (BITLEN != lenLeft) 
@@ -605,7 +685,11 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 						printf("\n");
 					}
 					sync(info, infoEx);
-					if (info.type >= MEMOP_MALLOC && info.type != MEMOP_REALLOC)
+					if (info.type >= MEMOP_MALLOC_BIG)
+					{
+						add_bigMemory(infoEx);
+					}
+					else if (info.type >= MEMOP_MALLOC && info.type != MEMOP_REALLOC)
 					{
 						add_addr(infoEx);
 						g_addNum++;
