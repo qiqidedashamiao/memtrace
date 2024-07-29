@@ -116,7 +116,7 @@ unsigned long int g_itemNum = 0llu;
 unsigned long int g_errorItemNum1 = 0llu;
 unsigned long int g_errorItemNum2 = 0llu;
 
-Maps g_maps("../map/maps-20240729_062737-15080.tx", "../", "", 0);
+Maps g_maps("../map/maps-20240730_065807-17042.tx", "../", "", 1);
 
 int main(int argc, char * argv[])
 {

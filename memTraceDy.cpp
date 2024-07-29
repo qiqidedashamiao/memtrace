@@ -195,9 +195,9 @@ void* writeFunction(void* arg)
 	fprintf(stdout,"--[pid:%d][tid:%d]zl:start writeFunction--\n", getpid(), gettid(), g_writeThread);
 	pthread_mutex_lock(&mwGlobalMutexWrite);
     while (1) {
-        printf("[pid:%d][tid:%d]waiting write... release write\n", getpid(), gettid(), g_writeThread);
+        //printf("[pid:%d][tid:%d]waiting write... release write\n", getpid(), gettid(), g_writeThread);
         pthread_cond_wait(&cond, &mwGlobalMutexWrite);
-        printf("[pid:%d][tid:%d]write woken up get write\n", getpid(), gettid(), g_writeThread);
+        //printf("[pid:%d][tid:%d]write woken up get write\n", getpid(), gettid(), g_writeThread);
 		SaveTraceInfo(LOGFILEOP_WRITE, g_writebuf, g_writelen);
     }
 	pthread_mutex_unlock(&mwGlobalMutexWrite);
