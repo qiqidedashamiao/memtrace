@@ -13,6 +13,10 @@ public:
     };
     bool findMemoryRegion(void *address, MemoryRegion &region);
     void addr2symbol(void *addr);
+    void setPreCmd(const char* preCmd) { m_preCmd = preCmd; }
+    void setASLR(bool aslr) { m_bASLR = aslr; }
+    void setExecPath(const char * execPath) { m_execPath = execPath; }
+    void setMapsPath(const char * mapsPath) { m_mapsPath = mapsPath; }
 
 private:
     map<void *, MemoryRegion> m_mapMemoryRegions;
