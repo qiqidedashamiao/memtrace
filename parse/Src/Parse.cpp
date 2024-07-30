@@ -674,6 +674,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 						// 	break;
 						// }
 					}
+					info.dep += dep;
 
 					if (logDetail)
 					{

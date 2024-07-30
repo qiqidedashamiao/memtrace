@@ -23,6 +23,19 @@ std::atomic<bool> running(true);
 std::condition_variable cv;
 std::mutex cv_m;
 
+class A {
+public:
+    A() {
+        std::cout << "A()" << std::endl;
+    }
+    ~A() {
+        std::cout << "~A()" << std::endl;
+    }
+private:
+    int a[1000];
+
+};
+
 
 char cache[1024*1024*100] = {2,2,3,4,5,6,7,8,9,10};
 // 每个线程执行的函数
@@ -37,20 +50,98 @@ void allocateAndFreeMemory(int threadId) {
         //int size = 1024; // 分配1到1024字节的内存
         int size = distr(eng); // 分配1到100KB之间的内存
         std::cout << "线程 " << gettid() << " 申请 " << size << " 字节内存" << std::endl;
-        char* buffer = new char[size];
-        std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+        int circle = 5;
+        if (size % circle == 0)
+        {
+            char* buffer = new char[size];
+            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
 
-        for (int i = 0; i < size; i++) {
-            buffer[i] = i;
+            for (int i = 0; i < size; i++) {
+                buffer[i] = i;
+            }
+            //foo();
+
+            // 模拟一些处理时间
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            // 释放内存
+            delete[] buffer;
         }
-        //foo();
+        else if (size % circle == 1)
+        {
+            char* buffer = (char *)malloc(size);
+            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
 
-        // 模拟一些处理时间
-        std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+            for (int i = 0; i < size; i++) {
+                buffer[i] = i;
+            }
+            //foo();
 
-        std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
-        // 释放内存
-        delete[] buffer;
+            // 模拟一些处理时间
+            std::this_thread::sleep_for(std::chrono::milliseconds(4000));
+
+            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            // 释放内存
+            free(buffer);
+        }
+        else if (size % circle == 2)
+        {
+            char* buffer = (char *)calloc(1, size);
+            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+
+            for (int i = 0; i < size; i++) {
+                buffer[i] = i;
+            }
+            //foo();
+
+            // 模拟一些处理时间
+            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
+            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            // 释放内存
+            free(buffer);
+        }
+        else if (size % circle == 3)
+        {
+            char* buffer = (char *)malloc(size);
+            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+
+            for (int i = 0; i < size; i++) {
+                buffer[i] = i;
+            }
+            buffer = (char *)realloc(buffer, size + size/2);
+            for (int i = size; i < size + size/2; i++) {
+                buffer[i] = i;
+            }
+            std::cout << "线程 " << gettid() << " 重新分配了 " << size+size/2 << " 字节内存" << std::endl;
+            //foo();
+
+            // 模拟一些处理时间
+            std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+
+            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            // 释放内存
+            free(buffer);
+        }
+        else if (size % circle == 4)
+        {
+            A* buffer = new A();
+            size = sizeof(A);
+            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+
+            // for (int i = 0; i < size; i++) {
+            //     buffer[i] = i;
+            // }
+            //foo();
+
+            // 模拟一些处理时间
+            std::this_thread::sleep_for(std::chrono::milliseconds(6000));
+
+            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            // 释放内存
+            delete buffer;
+        }
         std::cout << "线程 " << gettid() << " 释放了内存" << std::endl;
 
         // 模拟一些处理时间
@@ -138,7 +229,7 @@ int main(int argc, char** argv) {
     //foo();
     //test();
     //return 0;
-    const int numThreads = 10; // 线程数量
+    const int numThreads = 20; // 线程数量
     std::vector<std::thread> threads;
 
     cout << "[tid:" << gettid() << "]" << "main create thread" << endl;

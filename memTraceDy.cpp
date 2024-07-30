@@ -971,10 +971,10 @@ extern "C" void * malloc(size_t size)
 {
 	void* result = NULL;
 
-	// if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	// {
-	// 	InsertTraceMalloc(MEMOP_MALLOC_BIG, NULL, size);
-	// }
+	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
+	{
+		InsertTraceMalloc(MEMOP_MALLOC_BIG, NULL, size);
+	}
 	result = (void*)__libc_malloc(size);
 	InsertTraceMalloc(MEMOP_MALLOC, result, size);
 	return result;
@@ -984,10 +984,10 @@ extern "C" void *__libc_calloc(size_t, size_t);
 extern "C" void *calloc(size_t nmemb, size_t size)
 {
 	void* result = NULL;
-	// if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	// {
-	// 	InsertTraceMalloc(MEMOP_CALLOC_BIG, NULL, size);
-	// }
+	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
+	{
+		InsertTraceMalloc(MEMOP_CALLOC_BIG, NULL, size);
+	}
 	result = (void*)__libc_calloc(nmemb, size);
 	InsertTraceCaMalloc(MEMOP_CALLOC, result, nmemb*size);
 	return result;
@@ -1009,10 +1009,10 @@ extern "C" void *realloc(void *ptr, size_t size)
 void * operator new(size_t size)
 {
 	void * result = NULL;
-	// if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	// {
-	// 	InsertTraceMalloc(MEMOP_NEW_BIG, NULL, size);
-	// }
+	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
+	{
+		InsertTraceMalloc(MEMOP_NEW_BIG, NULL, size);
+	}
 	result = (void*)__libc_malloc(size);
 	InsertTraceCaMalloc(MEMOP_NEW, result, size);
 	return result;
@@ -1020,11 +1020,11 @@ void * operator new(size_t size)
 void * operator new (size_t size, const std::nothrow_t&)
 {
 	void * result = NULL;
-	// if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	// {
-	// 	InsertTraceMalloc(MEMOP_NEW_NOTHROW_BIG, NULL, size);
-	// }
-	// result = (void*)__libc_malloc(size);
+	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
+	{
+		InsertTraceMalloc(MEMOP_NEW_NOTHROW_BIG, NULL, size);
+	}
+	result = (void*)__libc_malloc(size);
 	InsertTraceCaMalloc(MEMOP_NEW_NOTHROW, result, size);
 	return result;
 }
