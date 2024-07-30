@@ -10,7 +10,7 @@ public:
         void *end;
         std::string execName;
         unsigned long num[3];  // 0:add 1:del_add 2:del
-        MemoryRegion() : start(NULL), end(NULL), execName(""),add(0),del(0),del_add(0) {num[0] = 0; num[1] = 0; num[2] = 0;}
+        MemoryRegion() : start(NULL), end(NULL), execName("") {num[0] = 0; num[1] = 0; num[2] = 0;}
     };
     bool findMemoryRegion(void *address, MemoryRegion &region);
     void addr2symbol(void *addr);
@@ -18,6 +18,7 @@ public:
     void setASLR(bool aslr) { m_bASLR = aslr; }
     void setExecPath(const char * execPath) { m_execPath = execPath; }
     void stat(void *ptrlr, int lrType);
+    void printStat();
 
 private:
     map<void *, MemoryRegion> m_mapMemoryRegions;

@@ -91,7 +91,7 @@ void Maps::addr2symbol(void * addr)
     }
 }
 
-void Maps::stat(void *ptrlr, int lrType)
+void Maps::stat(void *address, int lrType)
 {
     auto it = m_mapMemoryRegions.lower_bound(address);
 
@@ -99,5 +99,16 @@ void Maps::stat(void *ptrlr, int lrType)
     {
         MemoryRegion &region = it->second;
         region.num[lrType]++;
+    }
+}
+
+/**
+ * @brief 用户打印输出m_mapMemoryRegions表里面的每个地址段对应的可执行文件，以及申请的内存次数
+*/
+void Maps::printStat()
+{
+    for (auto it = m_mapMemoryRegions.begin(); it != m_mapMemoryRegions.end(); it++)
+    {
+        printf("%s    %p-%p     add %lu      del_add %lu     del %lu\n", it->second.execName.c_str(), it->second.start, it->second.end, it->second.num[0], it->second.num[1], it->second.num[2]);
     }
 }

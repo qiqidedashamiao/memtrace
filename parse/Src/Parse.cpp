@@ -418,7 +418,7 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 			printf("\n");
 		}
 	}
-	
+	g_maps.printStat();
 
 }
 
