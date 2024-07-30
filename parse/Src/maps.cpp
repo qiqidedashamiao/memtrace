@@ -90,3 +90,14 @@ void Maps::addr2symbol(void * addr)
         printf("%p\n", addr);
     }
 }
+
+void Maps::stat(void *ptrlr, int lrType)
+{
+    auto it = m_mapMemoryRegions.lower_bound(address);
+
+    if (it != m_mapMemoryRegions.end() && it->second.start <= address && it->second.end >= address)
+    {
+        MemoryRegion &region = it->second;
+        region.num[lrType]++;
+    }
+}

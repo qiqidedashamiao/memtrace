@@ -116,7 +116,7 @@ unsigned long int g_itemNum = 0llu;
 unsigned long int g_errorItemNum1 = 0llu;
 unsigned long int g_errorItemNum2 = 0llu;
 
-Maps g_maps("../map/maps-20240730_065807-17042.tx", "../", "", 1);
+Maps g_maps("../map/maps-20240730_232953-17818.tx", "../", "", 1);
 
 int main(int argc, char * argv[])
 {
@@ -418,6 +418,7 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 			printf("\n");
 		}
 	}
+	
 
 }
 
@@ -692,11 +693,13 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					}
 					else if (info.type >= MEMOP_MALLOC && info.type != MEMOP_REALLOC)
 					{
+						g_maps.stat(infoEx.ptrlr, 0);
 						add_addr(infoEx);
 						g_addNum++;
 					}
 					else if(info.type == MEMOP_REALLOC)
 					{
+						g_maps.stat(infoEx.ptrlr, 1);
 						addx_addr(infoEx);
 						g_deladdNum++;
 					}
