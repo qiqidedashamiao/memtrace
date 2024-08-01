@@ -883,7 +883,7 @@ size_t getMallocSize(void *ptr)
 			logInfo.ptrlr = __builtin_return_address(0);\
 			logInfo.size = sizeParam;\
 			/*fprintf(stdout,"[%s:%d][tid:%d]type:%d gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
-			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) - 2;\
+			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) ;\
 			/*fprintf(stdout,"[%s:%d][tid:%d]type:%d gst_in_malloc1:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
 			/*for (int i = 0; i < logInfo.dep; i++)*/\
 			/*{*/\
@@ -910,7 +910,7 @@ size_t getMallocSize(void *ptr)
 			logInfo.ptrlr = __builtin_return_address(0);\
 			logInfo.size = sizeParam;\
 			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
-			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) - 2;\
+			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) ;\
 			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc1:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
 			/*for (int i = 0; i < logInfo.dep; i++)*/\
 			/*{*/\
@@ -937,7 +937,7 @@ size_t getMallocSize(void *ptr)
 			logInfo.ptrlr = __builtin_return_address(0);\
 			logInfo.size = sizeParam;\
 			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
-			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) - 2;\
+			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) ;\
 			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc1:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
 			/*for (int i = 0; i < logInfo.dep; i++)*/\
 			/*{*/\

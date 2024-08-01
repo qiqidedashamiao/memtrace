@@ -116,7 +116,7 @@ unsigned long int g_itemNum = 0llu;
 unsigned long int g_errorItemNum1 = 0llu;
 unsigned long int g_errorItemNum2 = 0llu;
 
-Maps g_maps("../map/maps-20240730_232953-17818.tx", "../", "", 1);
+Maps g_maps("../map/maps-20240801_071046-19294.tx", "../", "", 1);
 
 int main(int argc, char * argv[])
 {
@@ -256,8 +256,10 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 	{
 		MemLogInfo &info = iter->second;
 		total += info.size;
-		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\t\n",
-			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr));
+		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tlen:\t%d%
+		
+		\n",
+			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr), info.dep);
 
 		if (isAddr2Symbol)
 		{
@@ -608,8 +610,8 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 						// 	g_errorItemNum2++;
 						// 	break;
 						// }
-						infoEx.spinfo[0] = info.ptrlr;
-						dep = 1;
+						//infoEx.spinfo[0] = info.ptrlr;
+						dep = 0;
 						if (info.type >= MEMOP_REALLOC)
 						{
 							lenLeft = fread(&info.ptrx, 1, BITLEN, file);
@@ -652,8 +654,8 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					}
 					if (info.dep > 0)
 					{
-						int i = 1;
-						for (i = 1; i <= info.dep; ++i)
+						int i = 0;
+						for (i = dep; i < info.dep; ++i)
 						{
 							spInfoLen = fread(infoEx.spinfo + i, 1, BITLEN, file);
 							if (BITLEN != spInfoLen) 
@@ -663,7 +665,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 								break;
 							}
 						}
-						if (i <= info.dep)
+						if (i < info.dep)
 						{
 							break;
 						}
