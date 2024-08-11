@@ -256,9 +256,7 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 	{
 		MemLogInfo &info = iter->second;
 		total += info.size;
-		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tlen:\t%d%
-		
-		\n",
+		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tdep:\t%d\n",
 			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr), info.dep);
 
 		if (isAddr2Symbol)
@@ -361,8 +359,8 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 	{
 		info.ptr = 0;
 		info.ptrx = 0;
-		printf("BigSize:\t%lu\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%p\t\n",
-			(info.size), (info.currtime), (info.type), (info.tid), (void*)(info.ptrlr));
+		printf("BigSize:\t%lu\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%p\tdep:\t%d\n",
+			(info.size), (info.currtime), (info.type), (info.tid), (void*)(info.ptrlr).info.dep);
 
 		if (isAddr2Symbol)
 		{
@@ -649,7 +647,7 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 					
 					if (logDetail)
 					{
-						printf("<Detail>\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tlen:%d\n",
+						printf("<Detail>\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tdep:%d\n",
 							(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr), info.dep);
 					}
 					if (info.dep > 0)
