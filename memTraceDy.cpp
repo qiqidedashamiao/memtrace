@@ -7,28 +7,29 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include <execinfo.h>
 #include <dlfcn.h>
 #include <unistd.h>
 #include <malloc.h>
-
 #include <new>
 
-// #ifdef __cplusplus
-// extern "C" {
-// #endif
+//如果定义宏USE_BACKTRACK，则包含头文件<execinfo.h>
+#ifdef USE_BACKTRACE
+#include <execinfo.h>
+#endif
 
-// // void *__wrap_calloc(size_t nmemb, size_t size);
-// // void *__wrap_malloc(size_t size);
-// // void __wrap_free(void *ptr);
-// // void *__wrap_realloc(void *ptr, size_t size);
-// // char *__wrap_strdup(const char *ptr);
+#ifdef __cplusplus
+extern "C" {
+#endif
+void __libc_free(void*);
+void * __libc_malloc(size_t);
+void *__libc_calloc(size_t, size_t);
+void *__libc_realloc(void*, size_t);
 
-// void MemTraceInit();
+void MemTraceInit();
 
-// #ifdef __cplusplus
-// }
-// #endif
+#ifdef __cplusplus
+}
+#endif
 
 
 #define gettid() syscall(SYS_gettid)
@@ -37,17 +38,18 @@ void MemTraceInit();
 
 void SaveTraceInfo(int optype, void * buf, int len);
 
-// void * operator new(size_t size);
-// void * operator new (size_t size, const std::nothrow_t&);
+void * operator new(size_t size);
+void * operator new (size_t size, const std::nothrow_t&);
 
-// //是否重载取决于C++库的实现
-// void * operator new[](size_t size);
-// void operator delete(void *ptr) _GLIBCXX_USE_NOEXCEPT
-//   __attribute__((__externally_visible__));
+//是否重载取决于C++库的实现
+void * operator new[](size_t size);
+//__externally_visible__ 属性告诉编译器，即使这个函数在本翻译单元中未被引用，它也不应该被删除或优化掉，因为它可能会被外部链接使用（例如通过动态链接或插件机制）
+void operator delete(void *ptr) _GLIBCXX_USE_NOEXCEPT
+  __attribute__((__externally_visible__));
 
-// //是否重载取决于C++库的实现
-// void operator delete[](void *ptr) _GLIBCXX_USE_NOEXCEPT
-//   __attribute__((__externally_visible__));
+//是否重载取决于C++库的实现
+void operator delete[](void *ptr) _GLIBCXX_USE_NOEXCEPT
+  __attribute__((__externally_visible__));
 
 
 // backtrace_symbols()
@@ -77,17 +79,8 @@ typedef enum ENUM_MEMOPTYPE
 	//MEMOP_STRDUP = 16,
 }ENUM_MEMOPTYPE;
 
-
-#ifdef BACKTRACE
-// 使用backtrace获取栈信息所记录的深度，默认10
-#if defined(USE_DEP) && (USE_DEP > 0)
-const int STACK_DEP = USE_DEP;
-#else
-const int STACK_DEP = 10;
-#endif
-#else
-const int STACK_DEP = 10;
-#endif
+//栈深度，在配置文件config.cfg中定义
+const int STACK_DEP = STACK_DEPTH;
 
 
 #define OUTPUT_BUFSIZE_LAST (1024*1024)
@@ -107,7 +100,11 @@ typedef struct __attribute__((packed)) MemLogInfo {
 
 typedef struct MemLogInfoEx {
 	MemLogInfo logInfo;
+#ifdef USE_BACKTRACE
 	void *spinfo[STACK_DEP];
+#else
+	void *lp;
+#endif
 } MemLogInfoEx;
 
 const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfo) -  sizeof(void *) * 2;
@@ -136,7 +133,6 @@ static pthread_mutex_t	mwGlobalMutexWrite = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  cond = PTHREAD_COND_INITIALIZER;
 static int s_init = 0;
 
-static unsigned int starttime = 0;
 static unsigned int g_lasttime = 0;
 static int g_lastswitch = 0;
 static int g_traceTid = 0;
@@ -152,8 +148,8 @@ static char * g_outputbuf = NULL;
 static char * g_writebuf = NULL;
 static int g_writelen = 0;
 int g_writeThread = -1;
-static __thread int in_malloc = 0;
-
+static __thread int gst_in_malloc = 0;	
+// 定义一个线程本地变量gst_in_malloc，用于标识当前线程是否在malloc中
 
 // 清理函数（如果需要）
 __attribute__((destructor)) void cleanup() {
@@ -162,7 +158,7 @@ __attribute__((destructor)) void cleanup() {
 
 void printMap(int pid)
 {
-	fprintf(stdout,"[%s:%d]pid:%ld tid:%d\n",__FUNCTION__, __LINE__, pid, gettid());
+	fprintf(stdout,"[%s:%d]pid:%d tid:%ld\n",__FUNCTION__, __LINE__, pid, gettid());
 	if (pid <= 0)
 	{
 		return;
@@ -180,7 +176,7 @@ void printMap(int pid)
 	len = sprintf(cmd, "cat /proc/%d/maps > %s", pid, name);
 	// cmd[len] = '\0';
 	cmd[strlen(cmd) - 1] = '\0';
-	fprintf(stdout, "[%s:%d][pid:%d][tid:%d]cmd:%s\n", __FUNCTION__, __LINE__, pid, gettid(), cmd);
+	fprintf(stdout, "[%s:%d][pid:%d][tid:%ld]cmd:%s\n", __FUNCTION__, __LINE__, pid, gettid(), cmd);
 	stream = popen(cmd, "w");
 	if (stream == NULL)
 	{
@@ -192,16 +188,16 @@ void printMap(int pid)
 void* writeFunction(void* arg) 
 {
 	g_writeThread = syscall(SYS_gettid);
-	fprintf(stdout,"--[pid:%d][tid:%d]zl:start writeFunction--\n", getpid(), gettid(), g_writeThread);
+	fprintf(stdout,"--[pid:%d][tid:%ld]zl:start writeFunction--\n", getpid(), gettid());
 	pthread_mutex_lock(&mwGlobalMutexWrite);
     while (1) {
-        //printf("[pid:%d][tid:%d]waiting write... release write\n", getpid(), gettid(), g_writeThread);
+        //printf("[pid:%d][tid:%ld]waiting write... release write\n", getpid(), gettid(), g_writeThread);
         pthread_cond_wait(&cond, &mwGlobalMutexWrite);
-        //printf("[pid:%d][tid:%d]write woken up get write\n", getpid(), gettid(), g_writeThread);
+        //printf("[pid:%d][tid:%ld]write woken up get write\n", getpid(), gettid(), g_writeThread);
 		SaveTraceInfo(LOGFILEOP_WRITE, g_writebuf, g_writelen);
     }
 	pthread_mutex_unlock(&mwGlobalMutexWrite);
-	fprintf(stdout,"[pid:%d][tid:%d]--zl:end writeFunction--.\n", getpid(), gettid(), g_writeThread);
+	fprintf(stdout,"[pid:%d][tid:%ld]--zl:end writeFunction--.\n", getpid(), gettid());
     pthread_exit(NULL);
 	return NULL;
 }
@@ -289,12 +285,12 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 			//isCheck = atoi(buf);
 			//0:off/1:on tid size
 			//fprintf(stdout,"46885 start change memtrace_param\n");
-			sscanf(buf, "%d %d %d %d %d", &isStart, &trace, &traceSize, &traceTid, &bigSize);
+			sscanf(buf, "%d %d %zu %d %zu", &isStart, &trace, &traceSize, &traceTid, &bigSize);
 		}
 		fclose(file);
 		file = NULL;
 	}
-	fprintf(stdout,"[%s:%d]memtrace_param:%d %d %d %d %d.\n",__FUNCTION__, __LINE__, isStart,trace, traceSize, traceTid, bigSize);
+	fprintf(stdout,"[%s:%d]memtrace_param:%d %d %zu %d %zu.\n",__FUNCTION__, __LINE__, isStart,trace, traceSize, traceTid, bigSize);
 	if (g_lastswitch != isStart)
 	{
 		// 启动开关变化，打印map
@@ -306,12 +302,12 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 		// 第一次启动开关打开，创建内存信息输出缓存
 		if(g_outputbuf == NULL)
 		{
-			fprintf(stdout,"[%s:%d][pid:%d][tid:%d]malloc g_outputbuf\n",__FUNCTION__, __LINE__, getpid(), gettid());
+			fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]malloc g_outputbuf\n",__FUNCTION__, __LINE__, getpid(), gettid());
 			char *outputbuf = NULL;
 			outputbuf = (char *)malloc(OUTPUT_BUFSIZE_LAST);
 			if(outputbuf == NULL)
 			{
-				fprintf(stdout,"[%s:%d][pid:%d][tid:%d]=========>malloc failed!\n",__FUNCTION__, __LINE__, getpid(), gettid());
+				fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]=========>malloc failed!\n",__FUNCTION__, __LINE__, getpid(), gettid());
 				return;
 			}
 			memset(outputbuf, 0, OUTPUT_BUFSIZE_LAST);
@@ -320,12 +316,12 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 		// 第一次启动开关打开，创建内存信息写入输出缓存
 		if(g_writebuf == NULL)
 		{
-			fprintf(stdout,"[%s:%d][pid:%d][tid:%d]malloc g_writebuf\n",__FUNCTION__, __LINE__, getpid(), gettid());
+			fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]malloc g_writebuf\n",__FUNCTION__, __LINE__, getpid(), gettid());
 			char *outputbuf = NULL;
 			outputbuf = (char *)malloc(OUTPUT_BUFSIZE_LAST);
 			if(outputbuf == NULL)
 			{
-				fprintf(stdout,"[%s:%d][pid:%d][tid:%d]=========>malloc failed!\n",__FUNCTION__, __LINE__, getpid(), gettid());
+				fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]=========>malloc failed!\n",__FUNCTION__, __LINE__, getpid(), gettid());
 				return;
 			}
 			memset(outputbuf, 0, OUTPUT_BUFSIZE_LAST);
@@ -370,7 +366,7 @@ void updateParam()
 	{
 		// g_lastswitch = lastswitch;
 		__sync_bool_compare_and_swap(&g_lastswitch, g_lastswitch, lastswitch);
-		fprintf(stdout, "[%s:%d][pid:%d][tid:%d]--g_lastswitch:%d--.\n", __FUNCTION__, __LINE__, getpid(), gettid(), g_lastswitch);
+		fprintf(stdout, "[%s:%d][pid:%d][tid:%ld]--g_lastswitch:%d--.\n", __FUNCTION__, __LINE__, getpid(), gettid(), g_lastswitch);
 		if (lastswitch == 0)
 		{
 			// 保存文件
@@ -412,7 +408,7 @@ void* threadFunction(void* arg)
  {
     //int id = *(int*)arg; // 获取传递的参数
 	
-	fprintf(stdout,"[pid:%d][tid:%d]--zl:start read param--.\n", getpid(), gettid());
+	fprintf(stdout,"[pid:%d][tid:%ld]--zl:start read param--.\n", getpid(), gettid());
 	
 	while(1)
 	{
@@ -421,7 +417,7 @@ void* threadFunction(void* arg)
 		// 30s读取一次
 		sleep(30);
 	}
-	fprintf(stdout,"[pid:%d][tid:%d]--zl:end read param--.\n", getpid(), gettid());
+	fprintf(stdout,"[pid:%d][tid:%ld]--zl:end read param--.\n", getpid(), gettid());
     pthread_exit(NULL);
 	return NULL;
 }
@@ -434,12 +430,11 @@ void* threadFunction(void* arg)
 */
 void createThread(int sonit_pid)
 {
-	fprintf(stdout,"[pid:%d][tid:%d]--zl:createThread--.\n", getpid(), gettid());
+	fprintf(stdout,"[pid:%d][tid:%ld]--zl:createThread--.\n", getpid(), gettid());
 	pthread_t thread;
-	int param = 1;
 	int ret = pthread_create(&thread, NULL, threadFunction, NULL);
     if (ret != 0) {
-		fprintf(stdout,"[pid:%d][tid:%d]zl:Failed to create thread.\n", getpid(), gettid());
+		fprintf(stdout,"[pid:%d][tid:%ld]zl:Failed to create thread.\n", getpid(), gettid());
         //std::cerr << "Failed to create thread." << std::endl;
         return ;
     }
@@ -453,9 +448,9 @@ void createThread(int sonit_pid)
 	
 	if (pthread_detach(thread) != 0)
     {
-        fprintf(stdout, "[pid:%d][tid:%d]zl:Failed to detach thread\n", getpid(), gettid());
+        fprintf(stdout, "[pid:%d][tid:%ld]zl:Failed to detach thread\n", getpid(), gettid());
     }
-	fprintf(stdout,"[pid:%d][tid:%d]--zl:createThread end--.\n", getpid(), gettid());
+	fprintf(stdout,"[pid:%d][tid:%ld]--zl:createThread end--.\n", getpid(), gettid());
 }
 
 
@@ -467,7 +462,7 @@ void createThread(int sonit_pid)
 __attribute__ ((constructor))
 void _main(int argc, char** argv)
 {
-	fprintf(stdout,"[pid:%d][tid:%d]zl: malloctest init argc:%d\n",getpid(), gettid(), argc);
+	fprintf(stdout,"[pid:%d][tid:%ld]zl: malloctest init argc:%d\n",getpid(), gettid(), argc);
 	char path[1024];
 	memset(path, 0 ,sizeof(path));
 	if (readlink("/proc/self/exe", path, sizeof(path) - 1) > 0)
@@ -475,7 +470,7 @@ void _main(int argc, char** argv)
 		char *pName = strrchr(path, '/');
 		if (pName != NULL)
 		{
-			fprintf(stdout,"[pid:%d][tid:%d]zl:pname:%s\n",getpid(), gettid(), pName);
+			fprintf(stdout,"[pid:%d][tid:%ld]zl:pname:%s\n",getpid(), gettid(), pName);
 			int len = strlen(pName);
 			for( int i = 0; i < len-4; ++i)
 			{
@@ -489,7 +484,7 @@ void _main(int argc, char** argv)
 						MemTraceInit();
 						updateParam();
 						s_init = 1;
-						fprintf(stdout,"[pid:%d][tid:%d]zl: s_init:%d\n",getpid(), gettid(),s_init);
+						fprintf(stdout,"[pid:%d][tid:%ld]zl: s_init:%d\n",getpid(), gettid(),s_init);
 						createThread(getpid());
 						break;
 					}
@@ -506,11 +501,11 @@ void _main(int argc, char** argv)
 */
 void MemTraceInit()
 {
-	fprintf(stdout,"[%s:%d][pid:%d][tid:%d] MemTraceInit 1.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] MemTraceInit 1.\n", __FUNCTION__, __LINE__,getpid(), gettid());
 	int ret = 0;
 	//printMap(getpid());
 	//ret = pthread_mutex_init(&mwGlobalMutexMemTrace, NULL);
-	fprintf(stdout,"[%s:%d][pid:%d][tid:%d] MemTraceInit 2. ret: %d.\n", __FUNCTION__, __LINE__,getpid(), gettid(), ret);
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] MemTraceInit 2. ret: %d.\n", __FUNCTION__, __LINE__,getpid(), gettid(), ret);
 }
 
 /**
@@ -520,7 +515,7 @@ void MemTraceInit()
 */
 void SaveTraceInfo(int optype, void * buf, int len)
 {
-	//fprintf(stdout,"[%s:%d][tid:%d] optype:%d SaveTraceInfo start\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), optype);
+	//fprintf(stdout,"[%s:%d][tid:%ld] optype:%d SaveTraceInfo start\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), optype);
 	static int total = 0;
 	static unsigned int no = 0u;
 
@@ -532,13 +527,13 @@ void SaveTraceInfo(int optype, void * buf, int len)
 			{
 				fwrite(buf, 1, len, g_file);
 			}
-			fprintf(stdout,"[%s:%d][tid:%d]close file no:%d\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), no-1);
+			fprintf(stdout,"[%s:%d][tid:%ld]close file no:%d\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), no-1);
 			total = 0;
 			fflush(g_file);
 			fclose(g_file);
 			g_file = NULL;
 		}
-		//fprintf(stdout,"[%s:%d][tid:%d]end close file no:%d\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), no-1);
+		//fprintf(stdout,"[%s:%d][tid:%ld]end close file no:%d\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), no-1);
 		return;
 	}
 	
@@ -552,7 +547,7 @@ void SaveTraceInfo(int optype, void * buf, int len)
 			g_file = NULL;
 		}
 	}
-	//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+	//fprintf(stdout,"[%s:%d][tid:%ld]SaveTraceInfo start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 	if (NULL == g_file)
 	{
 		char name[128];
@@ -563,167 +558,24 @@ void SaveTraceInfo(int optype, void * buf, int len)
 		sprintf(name, "%s/memery-%04d%02d%02d_%02d%02d%02d-%d-%u.log", pathList
 			, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
 			getpid(), no);
-		//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 4\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+		//fprintf(stdout,"[%s:%d][tid:%ld]SaveTraceInfo start 4\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 		g_file = fopen(name, "a");
-		//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 5\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+		//fprintf(stdout,"[%s:%d][tid:%ld]SaveTraceInfo start 5\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 		if (NULL == g_file)
 		{
-			fprintf(stdout,"[%s:%d][tid:%d]open %s failed.\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), name);
+			fprintf(stdout,"[%s:%d][tid:%ld]open %s failed.\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), name);
 			return;
 		}
-		fprintf(stdout,"[%s:%d][tid:%d]create file no:%d\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), no);
+		fprintf(stdout,"[%s:%d][tid:%ld]create file no:%d\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), no);
 		no++;
 	}
 	// 1表示写入文件数据基本单元大小，len表示写入数据基本单元个数
 	fwrite(buf, 1, len, g_file);
 	//fflush(g_file);
 	total += len;
-	//fprintf(stdout,"[%s:%d][tid:%d]SaveTraceInfo start 2\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
+	//fprintf(stdout,"[%s:%d][tid:%ld]SaveTraceInfo start 2\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
 	return;
 }
-
-/**
- * purpose: 写入内存跟踪信息
- * param:
- * return:
-*/
-// void stacktrace(unsigned int type, void *ptr, void *ptrx, unsigned long ptrlr, size_t size)
-// {
-// 	if (s_init==0)
-// 	{
-// 		return;
-// 	}
-//  	long i;
-// 	long* sp = &i;
-	
-// 	time_t tt;
-// 	time(&tt);
-
-// 	unsigned int currtime = (unsigned int)tt;
-// 	//fprintf(stdout,"[%s:%d][tid:%d]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
-
-// 	if(0 == g_lastswitch)
-// 	{
-// 		return;
-// 	}
-	
-
-// 	unsigned int tid = syscall(SYS_gettid);
-// 	if (tid == g_writeThread)
-// 	{
-// 		return;
-// 	}
-	
-// 	fprintf(stdout,"[%s:%d][tid:%d]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
-
-// 	//printStackTrace();
-
-// 	void *addresses[STACK_DEP];
-// 	int frame_count = 0;
-// 	in_malloc = 1;
-// 	frame_count = backtrace(addresses, STACK_DEP);
-// 	for (int i = 0; i < frame_count; i++)
-// 	{
-// 		fprintf(stdout,"[%s:%d] frame %d: %p\n", __FUNCTION__, __LINE__, i, addresses[i]);
-// 	}
-
-// 	if (g_traceTid > 0 && tid != g_traceTid)
-// 	{
-// 		return;
-// 	}
-// 	if (type >= MEMOP_MALLOC && g_traceSize > 0u && size != g_traceSize)
-// 	{
-// 		return;
-// 	}
-	
-// 	fprintf(stdout,"[%s:%d][tid:%d]stacktrace tid: %ld\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), tid);
-
-// 	if (g_outputbuf == NULL)
-// 	{
-// 		return;
-// 	}
-	
-// 	pthread_mutex_lock(&mwGlobalMutexMemTrace);
-// 	//fprintf(stdout,"[%s:%d][tid:%d]stacktrace start\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
-
-// 	if(g_outputbuf_pos > 0 && (currtime > g_lasttime + 30 || (g_outputbuf_pos + ONE_BUF_SIZE + 512 >= OUTPUT_BUFSIZE_LAST)))
-// 	{
-// 		pthread_mutex_lock(&mwGlobalMutexWrite);
-// 		memcpy(g_writebuf, g_outputbuf, g_outputbuf_pos);
-// 		g_writelen = g_outputbuf_pos;
-// 		pthread_cond_broadcast(&cond);
-// 		pthread_mutex_unlock(&mwGlobalMutexWrite);
-
-// 		//SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
-// 		g_outputbuf_pos = 0;
-// 		g_lasttime = currtime;
-// 	}
-// 	//fprintf(stdout,"[%s:%d][tid:%d]stacktrace start 1\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
-// 	//if((g_outputbuf_pos > 0) && (g_outputbuf_pos + ONE_BUF_SIZE >= OUTPUT_BUFSIZE_LAST))
-// 	//{
-// 	//	SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
-// 		// memcpy(g_outputbuf, &currtime, 4);
-// 		// memcpy(g_outputbuf+4, &type, 4);
-// 		// memcpy(g_outputbuf+8, &tid, 4);
-// 		// memcpy(g_outputbuf+16, &size, 8);
-// 		// memcpy(g_outputbuf+24, &ptr, 8);
-// 		// memcpy(g_outputbuf+32, &ptrx, 8);
-// 		// memcpy(g_outputbuf+40, &ptrlr, 8);
-// 		// if (type >= MEMOP_MALLOC && type <= MEMOP_NEW_ARRAY)
-// 		// {
-// 		// 	if(g_trace != 0)
-// 		// 	{
-// 		// 		memcpy(g_outputbuf+48, sp, 512);
-// 		// 		g_outputbuf_pos = ONE_BUF_WITHSP_SIZE;
-// 		// 	}
-// 		// 	else
-// 		// 	{
-// 		// 		g_outputbuf_pos = ONE_BUF_SIZE;	
-// 		// 	}
-// 		// }
-// 		// else
-// 		// {
-// 		// 	g_outputbuf_pos = ONE_BUF_SIZE;
-// 		// }
-// 		// g_lasttime = (unsigned int)tt;
-// 	//}
-// 	//else
-// 	// {
-// 		memcpy(g_outputbuf+g_outputbuf_pos, &currtime, 4);
-// 		memcpy(g_outputbuf+g_outputbuf_pos+4, &type, 4);
-// 		memcpy(g_outputbuf+g_outputbuf_pos+8, &tid, 4);
-// 		memcpy(g_outputbuf+g_outputbuf_pos+16, &size, 8);
-// 		memcpy(g_outputbuf+g_outputbuf_pos+24, &ptr, 8);
-// 		memcpy(g_outputbuf+g_outputbuf_pos+32, &ptrx, 8);
-// 		memcpy(g_outputbuf+g_outputbuf_pos+40, &ptrlr, 8);
-// 		//memcpy(g_outputbuf+g_outputbuf_pos+40, &dep, 8);
-// 		if (type >= MEMOP_MALLOC && type <= MEMOP_NEW_ARRAY)
-// 		{
-// 			if(g_trace != 0)
-// 			{
-// 				memcpy(g_outputbuf+g_outputbuf_pos+48, &sp, 512);
-// 				g_outputbuf_pos += ONE_BUF_WITHSP_SIZE;	
-// 			}
-// 			else
-// 			{
-// 				g_outputbuf_pos += ONE_BUF_SIZE;
-// 			}
-// 		}
-// 		else
-// 		{
-// 			g_outputbuf_pos += ONE_BUF_SIZE;
-// 		}
-// 	// 	if(currtime > g_lasttime + 30)
-// 	// 	{
-// 	// 		SaveTraceInfo(LOGFILEOP_WRITE, g_outputbuf, g_outputbuf_pos);
-// 	// 		g_outputbuf_pos = 0;
-// 	// 		g_lasttime = (unsigned int)tt;
-// 	// 	}
-// 	// }
-// 	//fprintf(stdout," [thread:%d]stacktrace end\n", syscall(SYS_gettid));
-// 	pthread_mutex_unlock(&mwGlobalMutexMemTrace);
-// 	return;
-// }
 
 void stacktrace(MemLogInfoEx &logInfoEx)
 {
@@ -733,35 +585,48 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 	MemLogInfo &logInfo = logInfoEx.logInfo;
 	unsigned int currtime = (unsigned int)tt;
 	logInfo.currtime = currtime;
-	//fprintf(stdout,"[%s:%d][tid:%d]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
+	//fprintf(stdout,"[%s:%d][tid:%ld]starttime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
 
-	unsigned int tid = syscall(SYS_gettid);
-	logInfo.tid = tid;
 	// if (tid == g_writeThread)
 	// {
 	// 	return;
 	// }
 	
-	//fprintf(stdout,"[%s:%d][tid:%d]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
+	//fprintf(stdout,"[%s:%d][tid:%ld]currtime is %u\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), currtime);
 
 	//printStackTrace();
 
-	if (g_traceTid > 0 && tid != g_traceTid)
+	logInfo.tid = gettid();
+
+#ifdef USE_THREAD
+	if (g_traceTid > 0 && logInfo.tid != g_traceTid)
 	{
 		return;
 	}
+#endif
 	
-	//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace tid: %d wait global\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+	//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace tid: %d wait global\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 	
 	pthread_mutex_lock(&mwGlobalMutexMemTrace);
-	//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace0 tid: %d get global\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+	//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace0 tid: %d get global\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 	if (logInfo.type >= MEMOP_MALLOC_BIG)
 	{
-		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_REMALLOC + logInfo.dep * BITLEN);
-		g_outputbuf_pos += ONE_BUF_SIZE_REMALLOC + logInfo.dep * BITLEN;
-		//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace00 tid: %d get global wait write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+#ifndef USE_BACKTRACE
+		logInfo.dep = STACK_DEP;
+#endif
+		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_MALLOC);
+		g_outputbuf_pos += ONE_BUF_SIZE_MALLOC;
+#ifdef USE_BACKTRACE
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);
+		g_outputbuf_pos += logInfo.dep * BITLEN;
+#else
+		fprintf(stdout,"[%s:%d][tid:%ld] type:%d logInfo.dep: %d STACK_DEP:%d\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, logInfo.dep, STACK_DEP);
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.lp, logInfo.dep * BITLEN);
+		g_outputbuf_pos += logInfo.dep * BITLEN;
+#endif
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace00 tid: %d get global wait write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		pthread_mutex_lock(&mwGlobalMutexWrite);
-		//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace01 tid: %d get global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace01 tid: %d get global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		// 交换g_writebuf 和 g_outputbuf指针的值，不交换内容
 		char * tempbuf = g_writebuf;
 		g_writebuf = g_outputbuf;
@@ -770,31 +635,40 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 		g_outputbuf_pos = 0;
 		g_lasttime = currtime;
 		pthread_mutex_unlock(&mwGlobalMutexMemTrace);
-		//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace1 tid: %d release global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace1 tid: %d release global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		SaveTraceInfo(LOGFILEOP_WRITE, g_writebuf, g_writelen);
 		SaveTraceInfo(LOGFILEOP_CLOSE, g_writebuf, 0);
-		//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace2 tid: %d release global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace2 tid: %d release global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		g_writelen = 0;
 		pthread_mutex_unlock(&mwGlobalMutexWrite);
-		//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace3 tid: %d release global release write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace3 tid: %d release global release write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		return;
 	}
 	else if (logInfo.type >= MEMOP_REALLOC)
 	{
 		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_REMALLOC);
 		g_outputbuf_pos += ONE_BUF_SIZE_REMALLOC;
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo + 2, logInfo.dep * BITLEN);
+#ifdef USE_BACKTRACE
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);
 		g_outputbuf_pos += logInfo.dep * BITLEN;
-		//memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_REMALLOC + logInfo.dep * BITLEN);
-		//g_outputbuf_pos += ONE_BUF_SIZE_REMALLOC + logInfo.dep * BITLEN;
-
+#else
+		logInfo.dep = STACK_DEP;
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.lp, logInfo.dep * BITLEN);
+		g_outputbuf_pos += logInfo.dep * BITLEN;
+#endif
 	}
 	else if (logInfo.type >= MEMOP_MALLOC)
 	{
 		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_MALLOC);
 		g_outputbuf_pos += ONE_BUF_SIZE_MALLOC;
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo + 2, logInfo.dep * BITLEN);
+#ifdef USE_BACKTRACE
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);
 		g_outputbuf_pos += logInfo.dep * BITLEN;
+#else
+		logInfo.dep = STACK_DEP;
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.lp, logInfo.dep * BITLEN);
+		g_outputbuf_pos += logInfo.dep * BITLEN;
+#endif
 	}
 	else
 	{
@@ -804,23 +678,23 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 
 	if(g_outputbuf_pos > 0 && (currtime > g_lasttime + 30 || (g_outputbuf_pos >= TOTAL_LEN)))
 	{
-		//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace4 tid: %d get global waite write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace4 tid: %d get global waite write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		pthread_mutex_lock(&mwGlobalMutexWrite);
-		//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace5 tid: %d get global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace5 tid: %d get global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		// 交换g_writebuf 和 g_outputbuf指针的值，不交换内容
 		char * tempbuf = g_writebuf;
 		g_writebuf = g_outputbuf;
 		g_writelen = g_outputbuf_pos;
 		g_outputbuf = tempbuf;
 		pthread_mutex_unlock(&mwGlobalMutexWrite);
-		//fprintf(stdout, "[%s:%d][tid:%d] type:%d stacktrace6 tid: %d get global release write\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+		//fprintf(stdout, "[%s:%d][tid:%ld] type:%d stacktrace6 tid: %d get global release write\n", __FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		pthread_cond_broadcast(&cond);
 		g_outputbuf_pos = 0;
 		g_lasttime = currtime;
 	}
-	//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace7 tid: %d get global release write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+	//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace7 tid: %d get global release write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 	pthread_mutex_unlock(&mwGlobalMutexMemTrace);
-	//fprintf(stdout,"[%s:%d][tid:%d] type:%d stacktrace8 tid: %d release global release write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
+	//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace8 tid: %d release global release write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 	
 	return;
 }
@@ -839,24 +713,25 @@ size_t getMallocSize(void *ptr)
 	return size;
 }
 
-
+#ifdef USE_ALL
 #define InsertTraceFree(typeParam, ptrParam) \
 {\
 	if (g_lastswitch != 0 && gst_in_malloc == 0) \
 	{\
-		if (g_traceSize != 0)\
-		{\
-			size_t size = malloc_usable_size(ptrParam);\
-			if (size >= g_traceSize)\
-			{\
-				MemLogInfoEx logInfoEx;\
-				MemLogInfo &logInfo = logInfoEx.logInfo;\
-				logInfo.type = typeParam;\
-				logInfo.ptr = ptrParam;\
-				stacktrace(logInfoEx);\
-			}\
-		}\
-		else\
+		MemLogInfoEx logInfoEx;\
+		MemLogInfo &logInfo = logInfoEx.logInfo;\
+		logInfo.type = typeParam;\
+		logInfo.ptr = ptrParam;\
+		stacktrace(logInfoEx);\
+	}\
+}
+#elif defined(USE_SIZE)
+#define InsertTraceFree(typeParam, ptrParam) \
+{\
+	if (g_traceSize != 0 && gst_in_malloc == 0) \
+	{\
+		size_t size = getMallocSize(ptrParam);\
+		if (size >= g_traceSize)\
 		{\
 			MemLogInfoEx logInfoEx;\
 			MemLogInfo &logInfo = logInfoEx.logInfo;\
@@ -866,13 +741,36 @@ size_t getMallocSize(void *ptr)
 		}\
 	}\
 }
+#else
+#define InsertTraceFree(typeParam, ptrParam)
+#endif
 
+#ifdef USE_ALL
+#define Contition() (g_lastswitch != 0)
+#elif defined(USE_SIZE)
+#define Contition(sizeParamTemp) (g_traceSize != 0 && sizeParamTemp > g_traceSize)
+#endif
 
+#ifdef USE_BACKTRACE
+#define Trace() logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) ;\
+		/*fprintf(stdout,"zl:[%s:%d][tid:%ld]type:%d gst_in_malloc1:%d dep:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc, logInfo.dep);*/\
+		/*char **strs = backtrace_symbols(logInfoEx.spinfo, logInfo.dep);*/ \
+		/*for (int i = 0; i < logInfo.dep; i++)*/\
+		/*{*/\
+		/*	fprintf(stdout,"[%s:%d][tid:%ld] address %d: %p\n", __FUNCTION__, __LINE__, gettid(), i, logInfoEx.spinfo[i]);*/\
+		/*	fprintf(stdout,"[%s:%d][tid:%ld] frame %d: %s\n", __FUNCTION__, __LINE__, gettid(), i, strs[i]);*/\
+		/*}*/\
+		/*free(strs);*/
+#else
+#define Trace() logInfoEx.lp = &result;
+#endif
+
+#if defined(USE_ALL) || defined(USE_SIZE)
 #define InsertTraceMalloc(typeParam, ptrParam, sizeParam) \
 {\
-	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
+	if (Contition(sizeParam))\
 	{\
-		/*fprintf(stdout,"[%s:%d][tid:%d]type:%d gst_in_malloc:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
+		/*fprintf(stdout,"[%s:%d][tid:%ld]type:%d gst_in_malloc:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
 		if (gst_in_malloc == 0)\
 		{\
 			gst_in_malloc = 1;\
@@ -882,41 +780,10 @@ size_t getMallocSize(void *ptr)
 			logInfo.ptr = ptrParam;\
 			logInfo.ptrlr = __builtin_return_address(0);\
 			logInfo.size = sizeParam;\
-			/*fprintf(stdout,"[%s:%d][tid:%d]type:%d gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
-			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) ;\
-			/*fprintf(stdout,"[%s:%d][tid:%d]type:%d gst_in_malloc1:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
-			/*for (int i = 0; i < logInfo.dep; i++)*/\
-			/*{*/\
-				/*fprintf(stdout,"[%s:%d][tid:%d] address %d: %p\n", __FUNCTION__, __LINE__, gettid(), i, logInfoEx.spinfo);*/\
-			/*}*/\
+			/*fprintf(stdout,"[%s:%d][tid:%ld]type:%d gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
+			Trace();\
 			stacktrace(logInfoEx);\
-			/*fprintf(stdout,"[%s:%d][tid:%d]type:%d gst_in_malloc2:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
-			gst_in_malloc = 0;\
-		}\
-	}\
-}
-
-#define InsertTraceCaMalloc(typeParam, ptrParam, sizeParam) \
-{\
-	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize))\
-	{\
-		if (gst_in_malloc == 0)\
-		{\
-			gst_in_malloc = 1;\
-			MemLogInfoEx logInfoEx;\
-			MemLogInfo &logInfo = logInfoEx.logInfo;\
-			logInfo.type = typeParam;\
-			logInfo.ptr = ptrParam;\
-			logInfo.ptrlr = __builtin_return_address(0);\
-			logInfo.size = sizeParam;\
-			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
-			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) ;\
-			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc1:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
-			/*for (int i = 0; i < logInfo.dep; i++)*/\
-			/*{*/\
-				/*fprintf(stdout,"[%s:%d][tid:%d] address %d: %p\n", __FUNCTION__, __LINE__, gettid(), i, logInfoEx.spinfo);*/\
-			/*}*/\
-			stacktrace(logInfoEx);\
+			/*fprintf(stdout,"[%s:%d][tid:%ld]type:%d gst_in_malloc2:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
 			gst_in_malloc = 0;\
 		}\
 	}\
@@ -924,7 +791,7 @@ size_t getMallocSize(void *ptr)
 
 #define InsertTraceReMalloc(typeParam, ptrParam, ptrxParam, sizeParam) \
 {\
-	if (g_lastswitch != 0 && (g_traceSize == 0 || sizeParam > g_traceSize) && ptrParam != ptrxParam)\
+	if (Contition(sizeParam))\
 	{\
 		if (gst_in_malloc == 0)\
 		{\
@@ -936,23 +803,56 @@ size_t getMallocSize(void *ptr)
 			logInfo.ptrx = ptrxParam;\
 			logInfo.ptrlr = __builtin_return_address(0);\
 			logInfo.size = sizeParam;\
-			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
-			logInfo.dep = backtrace(logInfoEx.spinfo, STACK_DEP) ;\
-			/*fprintf(stdout,"[%s:%d][tid:%d]gst_in_malloc1:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
-			/*for (int i = 0; i < logInfo.dep; i++)*/\
-			/*{*/\
-				/*fprintf(stdout,"[%s:%d][tid:%d] address %d: %p\n", __FUNCTION__, __LINE__, gettid(), i, logInfoEx.spinfo);*/\
-			/*}*/\
+			/*fprintf(stdout,"[%s:%d][tid:%ld]gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), gst_in_malloc);*/\
+			Trace();\
 			stacktrace(logInfoEx);\
 			gst_in_malloc = 0;\
 		}\
 	}\
 }
+#else
+#define InsertTraceMalloc(typeParam, ptrParam, sizeParam)
+#define InsertTraceReMalloc(typeParam, ptrParam, ptrxParam, sizeParam)
+#endif
+
+#ifdef USE_LARGE
+#define InsertTraceMallocBig(typeParam, ptrParam, sizeParam) \
+{\
+	if (g_bigSize != 0 && size >= g_bigSize)\
+	{\
+		/*fprintf(stdout,"[%s:%d][tid:%ld]type:%d gst_in_malloc:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
+		if (gst_in_malloc == 0)\
+		{\
+			gst_in_malloc = 1;\
+			MemLogInfoEx logInfoEx;\
+			MemLogInfo &logInfo = logInfoEx.logInfo;\
+			logInfo.type = typeParam;\
+			logInfo.ptr = ptrParam;\
+			logInfo.ptrlr = __builtin_return_address(0);\
+			logInfo.size = sizeParam;\
+			/*fprintf(stdout,"[%s:%d][tid:%ld]type:%d gst_in_malloc0:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
+			Trace();\
+			stacktrace(logInfoEx);\
+			/*fprintf(stdout,"[%s:%d][tid:%ld]type:%d gst_in_malloc2:%d\n", __FUNCTION__, __LINE__, gettid(), typeParam, gst_in_malloc);*/\
+			gst_in_malloc = 0;\
+		}\
+	}\
+}
+#else
+#define InsertTraceMallocBig(typeParam, ptrParam, sizeParam)
+#endif
 
 
-static __thread int gst_in_malloc = 0;	
+extern "C" void * malloc(size_t size)
+{
+	void* result = NULL;
 
-extern "C" void __libc_free(void*);
+	InsertTraceMallocBig(MEMOP_MALLOC_BIG, NULL, size);
+	result = (void*)__libc_malloc(size);
+	InsertTraceMalloc(MEMOP_MALLOC, result, size);
+	return result;
+}
+
 extern "C" void free(void *ptr)
 {
 	if (ptr == NULL)
@@ -965,42 +865,19 @@ extern "C" void free(void *ptr)
 }
 
 
-// 定义一个线程本地变量gst_in_malloc，用于标识当前线程是否在malloc中
-extern "C" void *__libc_malloc(size_t size);
-extern "C" void * malloc(size_t size)
-{
-	void* result = NULL;
-
-	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	{
-		InsertTraceMalloc(MEMOP_MALLOC_BIG, NULL, size);
-	}
-	result = (void*)__libc_malloc(size);
-	InsertTraceMalloc(MEMOP_MALLOC, result, size);
-	return result;
-}
-
-extern "C" void *__libc_calloc(size_t, size_t);
 extern "C" void *calloc(size_t nmemb, size_t size)
 {
 	void* result = NULL;
-	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	{
-		InsertTraceMalloc(MEMOP_CALLOC_BIG, NULL, size);
-	}
+	InsertTraceMallocBig(MEMOP_CALLOC_BIG, NULL, size);
 	result = (void*)__libc_calloc(nmemb, size);
-	InsertTraceCaMalloc(MEMOP_CALLOC, result, nmemb*size);
+	InsertTraceMalloc(MEMOP_CALLOC, result, nmemb*size);
 	return result;
 }
 
-extern "C" void *__libc_realloc(void*, size_t);
 extern "C" void *realloc(void *ptr, size_t size)
 {
 	void* result = NULL;
-	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	{
-		InsertTraceMalloc(MEMOP_REALLOC_BIG, NULL, size);
-	}
+	InsertTraceMallocBig(MEMOP_REALLOC_BIG, NULL, size);
 	result = (void*)__libc_realloc(ptr, size);
 	InsertTraceReMalloc(MEMOP_REALLOC, result, ptr, size);
 	return result;
@@ -1009,35 +886,26 @@ extern "C" void *realloc(void *ptr, size_t size)
 void * operator new(size_t size)
 {
 	void * result = NULL;
-	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	{
-		InsertTraceMalloc(MEMOP_NEW_BIG, NULL, size);
-	}
+	InsertTraceMallocBig(MEMOP_NEW_BIG, NULL, size);
 	result = (void*)__libc_malloc(size);
-	InsertTraceCaMalloc(MEMOP_NEW, result, size);
+	InsertTraceMalloc(MEMOP_NEW, result, size);
 	return result;
 }
 void * operator new (size_t size, const std::nothrow_t&)
 {
 	void * result = NULL;
-	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	{
-		InsertTraceMalloc(MEMOP_NEW_NOTHROW_BIG, NULL, size);
-	}
+	InsertTraceMallocBig(MEMOP_NEW_NOTHROW_BIG, NULL, size);
 	result = (void*)__libc_malloc(size);
-	InsertTraceCaMalloc(MEMOP_NEW_NOTHROW, result, size);
+	InsertTraceMalloc(MEMOP_NEW_NOTHROW, result, size);
 	return result;
 }
 
 void * operator new[](size_t size)
 {
 	void * result = NULL;
-	if (g_lastswitch != 0 && g_bigSize!=0 && size >= g_bigSize)
-	{
-		InsertTraceMalloc(MEMOP_NEW_ARRAY_BIG, NULL, size);
-	}
+	InsertTraceMallocBig(MEMOP_NEW_ARRAY_BIG, NULL, size);
 	result = (void*)__libc_malloc(size);
-	InsertTraceCaMalloc(MEMOP_NEW_ARRAY, result, size);
+	InsertTraceMalloc(MEMOP_NEW_ARRAY, result, size);
 	return result;
 }
 
@@ -1053,7 +921,6 @@ void operator delete(void* ptr) _GLIBCXX_USE_NOEXCEPT
 
 void operator delete[](void *ptr) _GLIBCXX_USE_NOEXCEPT
 {
-	unsigned long lrp = 0u;
 	if(ptr != NULL)
 	{
 		InsertTraceFree(MEMOP_DELETE_ARRAY, ptr);

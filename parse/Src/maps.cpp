@@ -2,16 +2,43 @@
 #include <stdlib.h>
 #include <iostream>
 #include <unistd.h>
+#include <dirent.h>
 
 #include "maps.h"
 
-Maps::Maps(const char * mapsPath, const char * execPath, const char* preCmd, bool aslr):m_execPath(execPath), m_preCmd(preCmd), m_bASLR(aslr)
+Maps::Maps():m_execPath(""), m_preCmd(""), m_bASLR(false)
 {
+    
+}
+
+void Maps::setMapsPath(const string mapsPath) 
+{ 
+    m_mapsPath = mapsPath; 
+    // 获取mapsPath目录下的第一个文件的路径，并打开
+    DIR *dir;
+    struct dirent *entry;
+    char filePath[1024];
+
+    dir = opendir(mapsPath.c_str());
+    if (dir == NULL) {
+        perror("opendir");
+        return ;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) { // 检查是否为常规文件
+            snprintf(filePath, sizeof(filePath), "%s/%s", mapsPath.c_str(), entry->d_name);
+            printf("First file: %s\n", filePath);
+            break;
+        }
+    }
+    closedir(dir);
+
     // 读取maps文件
-    FILE *file = fopen(mapsPath, "r");
+    FILE *file = fopen(filePath, "r");
     if (file == NULL)
     {
-        printf("open %s failed\n", mapsPath);
+        printf("open %s failed\n", mapsPath.c_str());
         return;
     }
     char buffer[1024];
@@ -42,12 +69,12 @@ Maps::Maps(const char * mapsPath, const char * execPath, const char* preCmd, boo
         }
     }
     fclose(file);
+
 }
 
 bool Maps::findMemoryRegion(void *address, MemoryRegion &region) {
         auto it = m_mapMemoryRegions.lower_bound(address);
         
-
         if (it != m_mapMemoryRegions.end() && it->second.start <= address && it->second.end >= address) {
             region = it->second;
             if (!m_bASLR)
@@ -66,6 +93,17 @@ bool Maps::findMemoryRegion(void *address, MemoryRegion &region) {
         return false;
     }
 
+// 判断地址是否在m_mapMemoryRegions表里面   
+bool Maps::isExist(void *address) 
+{
+    auto it = m_mapMemoryRegions.lower_bound(address);
+    if (it != m_mapMemoryRegions.end() && it->second.start <= address && it->second.end >= address) {
+
+        return true;
+    }
+    return false;
+}
+
 void Maps::addr2symbol(void * addr)
 {
     MemoryRegion region;
@@ -78,14 +116,14 @@ void Maps::addr2symbol(void * addr)
         unsigned long long offset = (unsigned long long)addr - (unsigned long long)region.start;
         //sprintf(cmd, "csky-abiv2-ux-linuxv3615-addr2line -a -e %s -f -C %p", soniaPath, addr);
         //sprintf(cmd, "aarch64-himix210-linux-sd3403v100-v1-addr2line -a -e %s -f -C %p", soniaPath, addr);
-        sprintf(cmd, "%saddr2line -a -e %s%s -f -C %p", m_preCmd.c_str(), m_execPath.c_str(), region.execName.c_str(), offset);
+        sprintf(cmd, "%saddr2line -a -e %s%s -f -C %p", m_preCmd.c_str(), m_execPath.c_str(), region.execName.c_str(), (void *)offset);
         //printf("cmd %s\n", cmd);
         stream = popen(cmd, "r");
         fread(symbolBuf, sizeof(char), sizeof(symbolBuf), stream);
         pclose(stream);
         printf("%s", symbolBuf);
     }
-    else
+    else if (region.end != NULL)
     {
         printf("%p\n", addr);
     }

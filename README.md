@@ -1,6 +1,6 @@
 ls ../list/memery-*.log > list.txt
 find ~ -name memery*.log > parse/list.txt
-parse/mem_log_parse 0 parse/list.txt 0 0 1 ./sonia > parse/parselog.txt
+parse/mem_log_parse 0 parse/list.txt 0 0 1 ../ ../map/ > parse/parselog.txt
 
 0   可执行文件
 1   解析类型 默认0
@@ -8,10 +8,19 @@ parse/mem_log_parse 0 parse/list.txt 0 0 1 ./sonia > parse/parselog.txt
 3   解析日志，0，不显示，1显示
 4  是否翻译地址到符号0 不翻译  1 翻译
 5  是否是全路径
-6  可执行文件地址
+6  可执行文件地址目录
+7  map文件夹路径
+
+
 
 echo "1 1 0 0 2048" > param
 echo "0 0 0 0 0" > param
+1 是否开启内存追踪总开关
+1 是否开启栈回溯，暂未使用
+0 申请的内存大小限制
+0 线程ID限制
+2048 记录大内存申请
+
 
 export LD_PRELOAD=/root/mount/share/memtrace/libpreload.so
 #export LD_PRELOAD=/home/234646/tools/git/workspace/memtrace/libpreload.so

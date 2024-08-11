@@ -1,4 +1,8 @@
-CROSS = #aarch64-himix210-linux-sd3403v100-v1
+#CROSS = #aarch64-himix210-linux-sd3403v100-v1
+#包含上一层级的配置文件 config.cfg
+include ../config.cfg
+
+TARGET = mem_log_parse
 
 CPP	= $(CROSS)g++
 CC	= $(CROSS)gcc
@@ -11,31 +15,38 @@ MEMTRACE_SRCPATH = ./Src
 MEMTRACE_LIBPATH = .
 OBJ_PATH = ./Obj
 BIN_PATH = .
+SRC =  $(MEMTRACE_SRCPATH)/Parse.cpp $(MEMTRACE_SRCPATH)/maps.cpp
 
 CFLAGS += -I./Include 
-CFLAGS += -Wall -O2 -Os -g -ansi
-CFLAGS += -D_REENTRANT -msoft-float 
+CFLAGS += -Wall -g --std=c++11
+CFLAGS += -lpthread -lc -lrt -ldl
 
+#增加默认栈深度的宏STACK_DEPTH
+CFLAGS += -DSTACK_DEPTH=$(STACK_DEPTH)
 
-#APP_LDFLAGS += -L./
-APP_LDFLAGS += -Wl,-rpath,./
-APP_LDFLAGS += -lpthread -lc -lrt -ldl
+#如果 USE_BACKTRACK为true，则增加宏USE_BACKTRACK
+ifeq ($(USE_BACKTRACE),true)
+	CFLAGS += -DUSE_BACKTRACE
+endif
 
+#如果CROSS值不为空，则增加宏CROSS
+ifneq ($(CROSS),)
+	CFLAGS += -DCROSS=$(CROSS)
+endif
 
-all: pre clean mem_log_parse
+#增加默认ALSR
+CFLAGS += -DASLR=$(ASLR)
+
+all: clean $(TARGET)
 
 pre:
 	mkdir -p $(OBJ_PATH)
 
-mem_log_parse: clean_server pre
-	@echo "make server"
-	#g++ -o $(OBJ_PATH)/mem_log_parse.o -c $(MEMTRACE_SRCPATH)/Parse.cpp -g
-	#g++ -o $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o $(APP_LDFLAGS) -g
-	#g++ -o $(BIN_PATH)/mem_log_parse $(MEMTRACE_SRCPATH)/Parse.cpp -g
-	g++ -o $(BIN_PATH)/mem_log_parse $(MEMTRACE_SRCPATH)/Parse.cpp $(MEMTRACE_SRCPATH)/maps.cpp  -g --std=c++11
+$(TARGET): clean pre
+	g++ -o $(BIN_PATH)/$(TARGET) $(CFLAGS) $(SRC) 
 
 clean_server:
 	$(RM) $(BIN_PATH)/server $(OBJ_PATH)/mem_log_parse.o
 
 clean:
-	$(RM) $(BIN_PATH)/mem_log_parse $(OBJ_PATH)/mem_log_parse.o ./a.out $(MEMTRACE_LIBPATH)/*.so $(MEMTRACE_SRCPATH)/*.o
+	

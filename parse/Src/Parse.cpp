@@ -42,7 +42,8 @@ typedef enum ENUM_MEMOPTYPE
 	//MEMOP_STRDUP = 16,
 }ENUM_MEMOPTYPE;
 
-const int STACK_DEP = 30;
+//栈深度，在配置文件config.cfg中定义
+const int STACK_DEP = STACK_DEPTH;
 const int BITLEN = 8;
 
 //64位大小位20 
@@ -87,7 +88,7 @@ const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfoPacked) -  sizeof(void *) * 3;  /
 //const int ONE_BUF_SIZE_MALLOC = sizeof(MemLogInfo) -  sizeof(void *) - STACK_DEP * sizeof(void *);   //28
 //const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo)- STACK_DEP * sizeof(void *);  //36
 
-void output_info(const char * soniaPath, int isAddr2Symbol);
+void output_info(int isAddr2Symbol);
 void parse_logfile(const     char * name, int isAddr2Symbol, int logDetail = 0, int isFullPath = 0);
 void get_logfilelist(const char * name, int isAddr2Symbol, int logDetail = 0, int isFullPath = 0);
 void get_spfile(const     char * name, int isFullPath, const char * soniaPath);
@@ -116,7 +117,15 @@ unsigned long int g_itemNum = 0llu;
 unsigned long int g_errorItemNum1 = 0llu;
 unsigned long int g_errorItemNum2 = 0llu;
 
-Maps g_maps("../map/maps-20240801_071046-19294.tx", "../", "", 1);
+#ifdef CROSS
+const char *g_preCmd = CROSS;
+#else
+const char *g_preCmd = "";
+#endif
+
+bool g_aslr = ASLR;
+
+Maps g_maps;
 
 int main(int argc, char * argv[])
 {
@@ -136,17 +145,25 @@ int main(int argc, char * argv[])
 
 	if (0 == parseType)
 	{
-		if (argc < 7)
+		if (argc < 8)
 		{
 			printf("invalid input param\n");
 			return 0;
 		}
+		
+		string execPath = argv[6];
+		string mapsPath = argv[7];
+
+		g_maps.setExecPath(execPath);
+		g_maps.setPreCmd(g_preCmd);
+		g_maps.setMapsPath(mapsPath);
+		g_maps.setASLR(g_aslr);
 
 		int logDetail = atoi(argv[3]);
 		int isAddr2Symbol = atoi(argv[4]); 
 		int isFullPath = atoi(argv[5]);
 		get_logfilelist(argv[2], isAddr2Symbol, logDetail, isFullPath);
-		output_info(argv[6], isAddr2Symbol);
+		output_info(isAddr2Symbol);
 		printf("itemNum: %lu;%lu;%lu; g_addNum: %lu; g_delNum: %lu; g_deladdNum: %lu.\n", g_itemNum, g_errorItemNum1, g_errorItemNum2, g_addNum, g_delNum, g_deladdNum);
 	}
 	else if(1 == parseType)
@@ -242,7 +259,7 @@ void addrstr2symbol(const char * soniaPath, char *addrstr, char * strSymbol, uns
 	
 }
 
-void output_info(const char * soniaPath, int isAddr2Symbol)
+void output_info(int isAddr2Symbol)
 {
 	unsigned int total = 0u;
 	TidStatMap tidStatMap;
@@ -256,7 +273,7 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 	{
 		MemLogInfo &info = iter->second;
 		total += info.size;
-		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tdep:\t%d\n",
+		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%u\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tdep:\t%d\n",
 			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr), info.dep);
 
 		if (isAddr2Symbol)
@@ -297,6 +314,14 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 		{
 			for (int i = 0; i < info.dep; i++)
 			{
+				#ifndef USE_BACKTRACE
+				// 判断是否在map表中
+				if (!g_maps.isExist(info.spinfo[i]))
+				{
+					continue;
+				}
+				#endif
+
 				if (!(i%ONE_ROW_SP_ITEM))
 				{
 					printf("\n");
@@ -359,8 +384,8 @@ void output_info(const char * soniaPath, int isAddr2Symbol)
 	{
 		info.ptr = 0;
 		info.ptrx = 0;
-		printf("BigSize:\t%lu\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%p\tdep:\t%d\n",
-			(info.size), (info.currtime), (info.type), (info.tid), (void*)(info.ptrlr).info.dep);
+		printf("BigSize:\t%d\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%p\tdep:\t%d\n",
+			(info.size), (info.currtime), (info.type), (info.tid), (void*)(info.ptrlr),info.dep);
 
 		if (isAddr2Symbol)
 		{
@@ -601,16 +626,8 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 							g_errorItemNum2++;
 							break;
 						}
-						//lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_FREE, 1, ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE, file);
-						// if (ONE_BUF_SIZE_MALLOC-ONE_BUF_SIZE_FREE != lenLeft) 
-						// {
-						// 	printf("error spInfoLen[%lu]\n", lenLeft);
-						// 	g_errorItemNum2++;
-						// 	break;
-						// }
-						//infoEx.spinfo[0] = info.ptrlr;
 						dep = 0;
-						if (info.type >= MEMOP_REALLOC)
+						if (info.type == MEMOP_REALLOC)
 						{
 							lenLeft = fread(&info.ptrx, 1, BITLEN, file);
 							if (BITLEN != lenLeft) 
@@ -621,33 +638,14 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 							}
 						}
 					}
-					// else if(info.type == MEMOP_REALLOC)
-					// {
-					// 	lenLeft = fread((char *)(void *)&info+ONE_BUF_SIZE_MALLOC, 1, ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC, file);
-					// 	if (ONE_BUF_SIZE_REMALLOC-ONE_BUF_SIZE_MALLOC != lenLeft) 
-					// 	{
-					// 		printf("error type[%x] spInfoLen[%lu]\n", info.type, lenLeft);
-					// 		g_errorItemNum2++;
-					// 		break;
-					// 	}
-					// 	infoEx.spinfo[0] = info.ptrlr;
-					// 	dep = 1;
-					// }
 					else
 					{
-						// spInfoLen = fread(info.spinfo, 1, ONE_SPINFO_SIZE, file);
-						// if (ONE_SPINFO_SIZE != spInfoLen) 
-						// {
-						// 	printf("error spInfoLen[%lu]\n", spInfoLen);
-						// 	g_errorItemNum2++;
-						// 	break;
-						// }
 						info.dep = 0;
 					}
 					
 					if (logDetail)
 					{
-						printf("<Detail>\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%lu\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tdep:%d\n",
+						printf("<Detail>\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%d\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tdep:%d\n",
 							(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr), info.dep);
 					}
 					if (info.dep > 0)

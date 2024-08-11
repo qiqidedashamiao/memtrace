@@ -54,7 +54,7 @@ void allocateAndFreeMemory(int threadId) {
         if (size % circle == 0)
         {
             char* buffer = new char[size];
-            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+            std::cout << "线程 " << gettid() << " new[]分配了 " << size << " 字节内存" << std::endl;
 
             for (int i = 0; i < size; i++) {
                 buffer[i] = i;
@@ -64,14 +64,14 @@ void allocateAndFreeMemory(int threadId) {
             // 模拟一些处理时间
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            std::cout << "线程 " << gettid() << " new[]开始释放内存" << std::endl;
             // 释放内存
             delete[] buffer;
         }
         else if (size % circle == 1)
         {
             char* buffer = (char *)malloc(size);
-            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+            std::cout << "线程 " << gettid() << " malloc分配了 " << size << " 字节内存" << std::endl;
 
             for (int i = 0; i < size; i++) {
                 buffer[i] = i;
@@ -81,14 +81,14 @@ void allocateAndFreeMemory(int threadId) {
             // 模拟一些处理时间
             std::this_thread::sleep_for(std::chrono::milliseconds(4000));
 
-            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            std::cout << "线程 " << gettid() << " malloc开始释放内存" << std::endl;
             // 释放内存
             free(buffer);
         }
         else if (size % circle == 2)
         {
             char* buffer = (char *)calloc(1, size);
-            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+            std::cout << "线程 " << gettid() << " calloc分配了 " << size << " 字节内存" << std::endl;
 
             for (int i = 0; i < size; i++) {
                 buffer[i] = i;
@@ -98,14 +98,14 @@ void allocateAndFreeMemory(int threadId) {
             // 模拟一些处理时间
             std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
-            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            std::cout << "线程 " << gettid() << " calloc开始释放内存" << std::endl;
             // 释放内存
             free(buffer);
         }
         else if (size % circle == 3)
         {
             char* buffer = (char *)malloc(size);
-            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+            std::cout << "线程 " << gettid() << " realloc分配了 " << size << " 字节内存" << std::endl;
 
             for (int i = 0; i < size; i++) {
                 buffer[i] = i;
@@ -114,13 +114,13 @@ void allocateAndFreeMemory(int threadId) {
             for (int i = size; i < size + size/2; i++) {
                 buffer[i] = i;
             }
-            std::cout << "线程 " << gettid() << " 重新分配了 " << size+size/2 << " 字节内存" << std::endl;
+            std::cout << "线程 " << gettid() << " realloc重新分配了 " << size+size/2 << " 字节内存" << std::endl;
             //foo();
 
             // 模拟一些处理时间
             std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 
-            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            std::cout << "线程 " << gettid() << " realloc开始释放内存" << std::endl;
             // 释放内存
             free(buffer);
         }
@@ -128,7 +128,7 @@ void allocateAndFreeMemory(int threadId) {
         {
             A* buffer = new A();
             size = sizeof(A);
-            std::cout << "线程 " << gettid() << " 分配了 " << size << " 字节内存" << std::endl;
+            std::cout << "线程 " << gettid() << " new分配了 " << size << " 字节内存" << std::endl;
 
             // for (int i = 0; i < size; i++) {
             //     buffer[i] = i;
@@ -138,7 +138,7 @@ void allocateAndFreeMemory(int threadId) {
             // 模拟一些处理时间
             std::this_thread::sleep_for(std::chrono::milliseconds(6000));
 
-            std::cout << "线程 " << gettid() << " 开始释放内存" << std::endl;
+            std::cout << "线程 " << gettid() << " new开始释放内存" << std::endl;
             // 释放内存
             delete buffer;
         }
@@ -163,10 +163,10 @@ void printSymbol(void* address) {
 
 void printStackTrace() {
     void* array[10];
-    char **strings;
+    //char **strings;
     printf("Stack trace start:\n");
     size_t size = backtrace(array, 10);
-    printf("Stack trace size: %d\n", size);
+    printf("Stack trace size: %zu\n", size);
     //strings = backtrace_symbols(array, size);
     for (size_t i = 0; i < size; i++) {
         //printSymbol(array[i]);

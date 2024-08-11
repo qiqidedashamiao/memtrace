@@ -3,7 +3,7 @@
 using namespace std;
 class Maps {
 public:
-    Maps(const char * mapsPath, const char * execPath, const char* preCmd = "", bool aslr = true);
+    Maps();
 public:
     struct MemoryRegion {
         void *start;
@@ -14,15 +14,18 @@ public:
     };
     bool findMemoryRegion(void *address, MemoryRegion &region);
     void addr2symbol(void *addr);
-    void setPreCmd(const char* preCmd) { m_preCmd = preCmd; }
+    void setPreCmd(const string preCmd) { m_preCmd = preCmd; }
     void setASLR(bool aslr) { m_bASLR = aslr; }
-    void setExecPath(const char * execPath) { m_execPath = execPath; }
+    void setExecPath(const string execPath) { m_execPath = execPath; }
+    void setMapsPath(const string mapsPath);
     void stat(void *ptrlr, int lrType);
     void printStat();
+    bool isExist(void *address);
 
 private:
     map<void *, MemoryRegion> m_mapMemoryRegions;
     string m_execPath;
     string m_preCmd;
+    string m_mapsPath;
     bool m_bASLR;   //是否支持地址空间布局随机化（ASLR）
 };
