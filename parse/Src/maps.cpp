@@ -6,7 +6,7 @@
 
 #include "maps.h"
 
-Maps::Maps():m_execPath(""), m_preCmd(""), m_bASLR(false)
+Maps::Maps():m_execPath(""), m_cross(""), m_bASLR(false)
 {
     
 }
@@ -116,7 +116,7 @@ void Maps::addr2symbol(void * addr)
         unsigned long long offset = (unsigned long long)addr - (unsigned long long)region.start;
         //sprintf(cmd, "csky-abiv2-ux-linuxv3615-addr2line -a -e %s -f -C %p", soniaPath, addr);
         //sprintf(cmd, "aarch64-himix210-linux-sd3403v100-v1-addr2line -a -e %s -f -C %p", soniaPath, addr);
-        sprintf(cmd, "%saddr2line -a -e %s%s -f -C %p", m_preCmd.c_str(), m_execPath.c_str(), region.execName.c_str(), (void *)offset);
+        sprintf(cmd, "%saddr2line -a -e %s%s -f -C %p", m_cross.c_str(), m_execPath.c_str(), region.execName.c_str(), (void *)offset);
         //printf("cmd %s\n", cmd);
         stream = popen(cmd, "r");
         fread(symbolBuf, sizeof(char), sizeof(symbolBuf), stream);

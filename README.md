@@ -1,16 +1,13 @@
 ls ../list/memery-*.log > list.txt
 find ~ -name memery*.log > parse/list.txt
-parse/mem_log_parse 0 parse/list.txt 0 0 1 ../ ../map/ > parse/parselog.txt
+parse/mem_log_parse 0 0 parse/list.txt > parse/parselog.txt
 
 0   可执行文件
-1   解析类型 默认0
-2   解析文件列表文件名
-3   解析日志，0，不显示，1显示
-4  是否翻译地址到符号0 不翻译  1 翻译
-5  是否是全路径
-6  可执行文件地址目录
-7  map文件夹路径
+1   是否翻译地址到符号0 不翻译  1 翻译 ，默认不显示
+2   解析日志，0，不显示，1显示， 默认不显示
+3   解析文件列表文件名，不存在的话，会根据config.cfg配置文件中的PATH_LIST_DIR自动生成list.txt，可不填
 
+可简化为parse/mem_log_parse > parse/parselog.txt
 
 
 echo "1 1 0 0 2048" > param

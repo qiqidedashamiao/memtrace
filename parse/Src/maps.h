@@ -14,7 +14,7 @@ public:
     };
     bool findMemoryRegion(void *address, MemoryRegion &region);
     void addr2symbol(void *addr);
-    void setPreCmd(const string preCmd) { m_preCmd = preCmd; }
+    void setCross(const string cross) { m_cross = cross; }
     void setASLR(bool aslr) { m_bASLR = aslr; }
     void setExecPath(const string execPath) { m_execPath = execPath; }
     void setMapsPath(const string mapsPath);
@@ -25,7 +25,7 @@ public:
 private:
     map<void *, MemoryRegion> m_mapMemoryRegions;
     string m_execPath;
-    string m_preCmd;
+    string m_cross;
     string m_mapsPath;
     bool m_bASLR;   //是否支持地址空间布局随机化（ASLR）
 };

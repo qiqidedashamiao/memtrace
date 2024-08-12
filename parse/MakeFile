@@ -37,6 +37,26 @@ endif
 #增加默认ALSR
 CFLAGS += -DASLR=$(ASLR)
 
+#如果 PATHL_LIST 值不为空，则增加宏 PATHL_LIST
+ifneq ($(PATH_LIST_DIR),)
+	CFLAGS += -DPATH_LIST_DIR=$(PATH_LIST_DIR)
+endif
+
+#如果 PATH_MAP_DIR 值不为空，则增加宏 PATH_MAP_DIR
+ifneq ($(PATH_MAP_DIR),)
+	CFLAGS += -DPATH_MAP_DIR=$(PATH_MAP_DIR)
+endif
+
+#如果 PATH_LIB_DIR 值不为空，则增加宏 PATH_LIB_DIR
+ifneq ($(PATH_LIB_DIR),)
+	CFLAGS += -DPATH_LIB_DIR=$(PATH_LIB_DIR)
+endif
+
+#如果 PATH_LIST 值不为空，则增加宏 PATH_LIST
+ifneq ($(PATH_LIST),)
+	CFLAGS += -DPATH_LIST=$(PATH_LIST)
+endif
+
 all: clean $(TARGET)
 
 pre:

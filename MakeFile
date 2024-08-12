@@ -84,6 +84,20 @@ endif
 #增加默认栈深度的宏STACK_DEPTH
 CFLAGS += -DSTACK_DEPTH=$(STACK_DEPTH)
 
+#如果PATH_LIST_DIR值不为空，则增加宏PATH_LIST_DIR
+ifneq ($(PATH_LIST_DIR),)
+	CFLAGS += -DPATH_LIST_DIR=$(PATH_LIST_DIR)
+endif
+
+#如果PATHMAP值不为空，则增加宏PATHMAP
+ifneq ($(PATH_MAP_DIR),)
+	CFLAGS += -DPATH_MAP_DIR=$(PATH_MAP_DIR)
+endif
+
+#如果PATHPARAM值不为空，则增加宏PATHPARAM
+ifneq ($(PATH_PARAM_DIR),)
+	CFLAGS += -DPATH_PARAM=$(PATH_PARAM_DIR)
+endif
 
 
 all: $(TARGET)

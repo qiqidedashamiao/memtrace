@@ -118,12 +118,14 @@ unsigned long int g_errorItemNum1 = 0llu;
 unsigned long int g_errorItemNum2 = 0llu;
 
 #ifdef CROSS
-const char *g_preCmd = CROSS;
+const char *g_cross = CROSS;
 #else
-const char *g_preCmd = "";
+const char *g_cross = "";
 #endif
 
 bool g_aslr = ASLR;
+string g_path_map = PATH_MAP;
+string g_path_lib = PATH_LIB;
 
 Maps g_maps;
 
@@ -139,49 +141,39 @@ int main(int argc, char * argv[])
 		printf("hello argv[%d]: %s\n", i, argv[i]);
 	}
 
-	printf("mem_log_parse parseType(0) logListFileName showLogDetail addr2symbol isFullPath soniaPath\n");
-	printf("mem_log_parse parseType(1) spInfoFileName isFullPath soniaPath\n");
-	int parseType = atoi(argv[1]);
+	//printf("mem_log_parse parseType(0) logListFileName showLogDetail addr2symbol isFullPath soniaPath\n");
+	//printf("mem_log_parse parseType(1) spInfoFileName isFullPath soniaPath\n");
 
-	if (0 == parseType)
+	// if (argc < 5)
+	// {
+	// 	printf("invalid input param\n");
+	// 	return 0;
+	// }
+
+	g_maps.setExecPath(g_path_lib);
+	g_maps.setPreCmd(g_cross);
+	g_maps.setMapsPath(g_path_map);
+	g_maps.setASLR(g_aslr);
+
+	int isAddr2Symbol = 1;
+	if (argc > 1)
 	{
-		if (argc < 8)
-		{
-			printf("invalid input param\n");
-			return 0;
-		}
-		
-		string execPath = argv[6];
-		string mapsPath = argv[7];
-
-		g_maps.setExecPath(execPath);
-		g_maps.setPreCmd(g_preCmd);
-		g_maps.setMapsPath(mapsPath);
-		g_maps.setASLR(g_aslr);
-
-		int logDetail = atoi(argv[3]);
-		int isAddr2Symbol = atoi(argv[4]); 
-		int isFullPath = atoi(argv[5]);
-		get_logfilelist(argv[2], isAddr2Symbol, logDetail, isFullPath);
-		output_info(isAddr2Symbol);
-		printf("itemNum: %lu;%lu;%lu; g_addNum: %lu; g_delNum: %lu; g_deladdNum: %lu.\n", g_itemNum, g_errorItemNum1, g_errorItemNum2, g_addNum, g_delNum, g_deladdNum);
+		isAddr2Symbol = atoi(argv[1]);
 	}
-	else if(1 == parseType)
+	int logDetail = 0;
+	if (argc > 2)
 	{
-		if (argc < 5)
-		{
-			printf("invalid input param\n");
-			return 0;
-		}
-		int isFullPath = atoi(argv[3]); 
-		get_spfile(argv[2], isFullPath, argv[4]);
+		logDetail = atoi(argv[2]);
 	}
-	else
+	string pathList = "";
+	if (argc > 3)
 	{
-		return 0;
+		pathList = argv[3];
 	}
+	get_logfilelist(pathList.c_str(), isAddr2Symbol, logDetail);
+	output_info(isAddr2Symbol);
+	printf("itemNum: %lu;g_errorItemNum1: %lu;g_errorItemNum2: %lu; g_addNum: %lu; g_delNum: %lu; g_deladdNum: %lu.\n", g_itemNum, g_errorItemNum1, g_errorItemNum2, g_addNum, g_delNum, g_deladdNum);
 
-	
 	return 0;
 }
 
@@ -447,79 +439,7 @@ void output_info(int isAddr2Symbol)
 
 }
 
-void get_spfile(const char * name, int isFullPath, const char * soniaPath)
-{
-	char symbolBuf[4096];
-
-	if (NULL == name)
-	{
-		printf("get_logfilelist name is null!\n");
-		return;
-	}
-
-	printf("get_spfile name %s!\n", name);
-	char szFileName[1024];
-	if (isFullPath)
-	{
-		sprintf(szFileName, "%s", name);
-	}
-	else
-	{
-		sprintf(szFileName, "./%s", name);
-	}
-	printf("get_spfile name %s;\n", szFileName);
-	
-	FILE * file = NULL;
-	file = fopen(szFileName, "r");
-	if(file != NULL)
-	{
-		char * line = NULL;
-		size_t len = 0;
-		ssize_t read;
-		char szSPAddr[ONE_ROW_SP_ITEM][64];
-		while ((read = getline(&line, &len, file)) != -1) 
-		{
-			printf("Retrieved line of length %zu :\n", read);
-			if ((read >= 1) && ('\n' == line[read-1]))
-			{
-				line[read-1] = '\0';
-			}
-			memset(szSPAddr, 0 , sizeof(szSPAddr));
-			sscanf(line, "\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
-				, szSPAddr[0], szSPAddr[1], szSPAddr[2], szSPAddr[3]
-				, szSPAddr[4], szSPAddr[5], szSPAddr[6], szSPAddr[7]
-				, szSPAddr[8], szSPAddr[9], szSPAddr[10], szSPAddr[11]
-				, szSPAddr[12], szSPAddr[13], szSPAddr[14], szSPAddr[15]
-				, szSPAddr[16], szSPAddr[17], szSPAddr[18], szSPAddr[19]
-				, szSPAddr[20], szSPAddr[21], szSPAddr[22], szSPAddr[23]
-				, szSPAddr[24], szSPAddr[25], szSPAddr[26], szSPAddr[27]
-				, szSPAddr[28], szSPAddr[29], szSPAddr[30], szSPAddr[31]);
-			for (int i = 0; i < ONE_ROW_SP_ITEM; i++)
-			{
-				if (strcmp("(nil)", szSPAddr[i]))
-				{
-					memset(symbolBuf, '\0', sizeof(symbolBuf));
-					addrstr2symbol(soniaPath, szSPAddr[i], symbolBuf, sizeof(symbolBuf));
-					printf("\t\t%s:\t\t %s\n", szSPAddr[i], symbolBuf);
-				}
-				else
-				{
-					printf("\t\t%s:\t\t NULL\n", szSPAddr[i]);
-				}
-			}
-		}
-		if (line)
-		{
-			free(line);
-			line = NULL;
-		}
-	
-		fclose(file);
-		file = NULL;
-	}
-	return;
-}
-void get_logfilelist(const char * name, int isAddr2Symbol, int logDetail, int isFullPath)
+void get_logfilelist(const char * name, int isAddr2Symbol, int logDetail)
 {
 	if (NULL == name)
 	{
@@ -542,7 +462,7 @@ void get_logfilelist(const char * name, int isAddr2Symbol, int logDetail, int is
 			{
 				line[read-1] = '\0';
 			}			printf("%s\n", line);
-			parse_logfile(line, isAddr2Symbol, logDetail, isFullPath);
+			parse_logfile(line, isAddr2Symbol, logDetail);
 		}
 		if (line)
 		{
@@ -569,7 +489,7 @@ void sync(const MemLogInfoPacked &info, MemLogInfo &infoEx)
 	infoEx.ptrx = info.ptrlr;
 }
 
-void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFullPath)
+void parse_logfile(const char * name, int isAddr2Symbol, int logDetail)
 {
 	if (NULL == name)
 	{
@@ -577,16 +497,16 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail, int isFu
 		return;
 	}
 
-	printf("parse_logfile name %s,\n", name);
-	char szFileName[1024];
-	if (isFullPath)
-	{
-		sprintf(szFileName, "%s", name);
-	}
-	else
-	{
-		sprintf(szFileName, "./%s", name);
-	}
+	// printf("parse_logfile name %s,\n", name);
+	// char szFileName[1024];
+	// if (isFullPath)
+	// {
+	// 	sprintf(szFileName, "%s", name);
+	// }
+	// else
+	// {
+	// 	sprintf(szFileName, "./%s", name);
+	// }
 	printf("parse_logfile name %s\n", szFileName);
 	
 	FILE * file = NULL;

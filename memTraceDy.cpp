@@ -116,9 +116,13 @@ const int ONE_SPINFO_ITEM = (ONE_SPINFO_SIZE/8);
 const int ONE_ROW_SP_ITEM = (64);
 const int TOTAL_LEN = OUTPUT_BUFSIZE_LAST - sizeof(MemLogInfo);
 
-static const char* pathList = "/root/mount/share/memtrace/list";
-static const char* pathMap = "/root/mount/share/memtrace/map";
-static const char* pathParam = "/root/mount/share/memtrace/param";
+// static const char* g_path_list_dir = "/root/mount/share/memtrace/list";
+// static const char* g_path_map_dir = "/root/mount/share/memtrace/map";
+// static const char* g_path_param_dir = "/root/mount/share/memtrace/param";
+
+static const char* g_path_list_dir = PATH_LIST_DIR;
+static const char* g_path_map_dir = PATH_MAP_DIR;
+static const char* g_path_param_dir = PATH_PARAM_DIR;
 
 typedef enum ENUM_LOGFILEOPTYPE
 {
@@ -169,7 +173,7 @@ void printMap(int pid)
 	time_t tt;
 	time(&tt);
 	localtime_r(&tt, &t);
-	int len = sprintf(name, "%s/maps-%04d%02d%02d_%02d%02d%02d-%d.txt", pathMap, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, pid);
+	int len = sprintf(name, "%s/maps-%04d%02d%02d_%02d%02d%02d-%d.txt", g_path_map_dir, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, pid);
 	name[len] = '\0';
 	FILE *stream;
 	char cmd[128] = {0};
@@ -273,7 +277,7 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 	trace = 0;
 	bigSize = 0;
 	FILE * file = NULL;
-	file = fopen(pathParam, "r");
+	file = fopen(g_path_param_dir, "r");
 	if(file != NULL)
 	{
 		size_t len = 0;
@@ -555,7 +559,7 @@ void SaveTraceInfo(int optype, void * buf, int len)
 		time_t tt;
 		time(&tt);
 		localtime_r(&tt, &t);
-		sprintf(name, "%s/memery-%04d%02d%02d_%02d%02d%02d-%d-%u.log", pathList
+		sprintf(name, "%s/memery-%04d%02d%02d_%02d%02d%02d-%d-%u.log", g_path_list_dir
 			, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
 			getpid(), no);
 		//fprintf(stdout,"[%s:%d][tid:%ld]SaveTraceInfo start 4\n",__FUNCTION__, __LINE__, syscall(SYS_gettid));
