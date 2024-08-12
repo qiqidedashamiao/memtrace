@@ -94,9 +94,9 @@ ifneq ($(PATH_MAP_DIR),)
 	CFLAGS += -DPATH_MAP_DIR=$(PATH_MAP_DIR)
 endif
 
-#如果PATHPARAM值不为空，则增加宏PATHPARAM
-ifneq ($(PATH_PARAM_DIR),)
-	CFLAGS += -DPATH_PARAM=$(PATH_PARAM_DIR)
+#如果 PATH_PARAM 值不为空，则增加宏 PATH_PARAM
+ifneq ($(PATH_PARAM),)
+	CFLAGS += -DPATH_PARAM=$(PATH_PARAM)
 endif
 
 

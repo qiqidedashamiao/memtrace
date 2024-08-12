@@ -118,11 +118,11 @@ const int TOTAL_LEN = OUTPUT_BUFSIZE_LAST - sizeof(MemLogInfo);
 
 // static const char* g_path_list_dir = "/root/mount/share/memtrace/list";
 // static const char* g_path_map_dir = "/root/mount/share/memtrace/map";
-// static const char* g_path_param_dir = "/root/mount/share/memtrace/param";
+// static const char* g_path_param = "/root/mount/share/memtrace/param";
 
 static const char* g_path_list_dir = PATH_LIST_DIR;
 static const char* g_path_map_dir = PATH_MAP_DIR;
-static const char* g_path_param_dir = PATH_PARAM_DIR;
+static const char* g_path_param = PATH_PARAM;
 
 typedef enum ENUM_LOGFILEOPTYPE
 {
@@ -277,7 +277,7 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 	trace = 0;
 	bigSize = 0;
 	FILE * file = NULL;
-	file = fopen(g_path_param_dir, "r");
+	file = fopen(g_path_param, "r");
 	if(file != NULL)
 	{
 		size_t len = 0;

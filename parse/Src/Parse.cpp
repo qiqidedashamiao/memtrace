@@ -89,9 +89,8 @@ const int ONE_BUF_SIZE_FREE = sizeof(MemLogInfoPacked) -  sizeof(void *) * 3;  /
 //const int ONE_BUF_SIZE_REMALLOC = sizeof(MemLogInfo)- STACK_DEP * sizeof(void *);  //36
 
 void output_info(int isAddr2Symbol);
-void parse_logfile(const     char * name, int isAddr2Symbol, int logDetail = 0, int isFullPath = 0);
-void get_logfilelist(const char * name, int isAddr2Symbol, int logDetail = 0, int isFullPath = 0);
-void get_spfile(const     char * name, int isFullPath, const char * soniaPath);
+void parse_logfile(const     char * name, int isAddr2Symbol, int logDetail = 0);
+void get_logfilelist(const char * name, int isAddr2Symbol, int logDetail = 0);
 
 
 typedef std::map<void *, MemLogInfo> AddrMap;
@@ -124,8 +123,8 @@ const char *g_cross = "";
 #endif
 
 bool g_aslr = ASLR;
-string g_path_map = PATH_MAP;
-string g_path_lib = PATH_LIB;
+string g_path_map_dir = PATH_MAP_DIR;
+string g_path_lib_dir = PATH_LIB_DIR;
 
 Maps g_maps;
 
@@ -150,9 +149,9 @@ int main(int argc, char * argv[])
 	// 	return 0;
 	// }
 
-	g_maps.setExecPath(g_path_lib);
-	g_maps.setPreCmd(g_cross);
-	g_maps.setMapsPath(g_path_map);
+	g_maps.setExecPath(g_path_lib_dir);
+	g_maps.setCross(g_cross);
+	g_maps.setMapsPath(g_path_map_dir);
 	g_maps.setASLR(g_aslr);
 
 	int isAddr2Symbol = 1;
@@ -507,10 +506,10 @@ void parse_logfile(const char * name, int isAddr2Symbol, int logDetail)
 	// {
 	// 	sprintf(szFileName, "./%s", name);
 	// }
-	printf("parse_logfile name %s\n", szFileName);
+	printf("parse_logfile name %s\n", name);
 	
 	FILE * file = NULL;
-	file = fopen(szFileName, "r");
+	file = fopen(name, "r");
 	if(file != NULL)
 	{
 		size_t len = 0;
