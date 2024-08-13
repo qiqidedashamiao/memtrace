@@ -295,7 +295,27 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 		file = NULL;
 	}
 	fprintf(stdout,"[%s:%d]memtrace_param:%d %d %zu %d %zu.\n",__FUNCTION__, __LINE__, isStart,trace, traceSize, traceTid, bigSize);
+	bool flag = false;
+#if defined(USE_ALL)
 	if (g_lastswitch != isStart)
+	{
+		flag = true;
+	}
+#endif
+#if defined(USE_LARGE)
+	if (g_bigSize != bigSize)
+	{
+		flag = true;
+	}
+#endif
+#if defined(USE_SIZE)
+	if (g_traceSize != traceSize)
+	{
+		flag = true;
+	}
+#endif
+
+	if (flag)
 	{
 		// 启动开关变化，打印map
 		printMap(getpid());
@@ -749,7 +769,9 @@ size_t getMallocSize(void *ptr)
 #define InsertTraceFree(typeParam, ptrParam)
 #endif
 
-#ifdef USE_ALL
+#if defined(USE_ALL) && defined(USE_SIZE)
+#define Contition(sizeParamTemp) (g_lastswitch != 0 || (g_traceSize != 0 && sizeParamTemp > g_traceSize))
+#elif defined(USE_ALL)
 #define Contition() (g_lastswitch != 0)
 #elif defined(USE_SIZE)
 #define Contition(sizeParamTemp) (g_traceSize != 0 && sizeParamTemp > g_traceSize)
