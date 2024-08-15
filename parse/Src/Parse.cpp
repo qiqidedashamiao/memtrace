@@ -10,6 +10,10 @@
 
 #include "maps.h"
 
+extern "C" {
+std::string formatPointerAddress(void* ptr);
+}
+
 const int ONE_BUF_SIZE = (48);
 const int ONE_SPINFO_SIZE = (512);
 const int ONE_BUF_WITHSP_SIZE = (ONE_BUF_SIZE + ONE_SPINFO_SIZE);
@@ -44,7 +48,8 @@ typedef enum ENUM_MEMOPTYPE
 
 //栈深度，在配置文件config.cfg中定义
 const int STACK_DEP = STACK_DEPTH;
-const int BITLEN = 8;
+//配置文件config.cfg中定义BITLEN
+//const int BITLEN = 8;
 
 //64位大小位20 
 // typedef struct __attribute__((packed)) MemLogInfo {
@@ -130,10 +135,9 @@ Maps g_maps;
 
 int main(int argc, char * argv[])
 {
-	
-	//void * addr = (void *)0x401918;
-	//maps.addr2symbol(addr);
-	//return 0;
+	// void *p = (void *)0x12345678910;
+	// printf("p: %016lx\n", p);
+	// return 0;
 	printf("hello argc: %d\n", argc);
 	for (int i = 1; i < argc; i++)
 	{
@@ -252,6 +256,8 @@ void addrstr2symbol(const char * soniaPath, char *addrstr, char * strSymbol, uns
 
 void output_info(int isAddr2Symbol)
 {
+	
+	g_maps.printStat();
 	unsigned int total = 0u;
 	TidStatMap tidStatMap;
 	LRStatMap lrStatMap;
@@ -264,8 +270,13 @@ void output_info(int isAddr2Symbol)
 	{
 		MemLogInfo &info = iter->second;
 		total += info.size;
-		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%u\tptr:\t%p\tptrx:\t%p\tptrlr:\t%p\tdep:\t%d\n",
-			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (void*)(info.ptrlr), info.dep);
+		#if BITLEN==4
+		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%u\tptr:\t%p\tptrx:\t%p\tptrlr:\t%08x\tdep:\t%d\n",
+			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), info.ptrlr, info.dep);
+		#else
+		printf("currtime:\t%u\ttype:\t%d\ttid:\t%d\tsize:\t%u\tptr:\t%p\tptrx:\t%p\tptrlr:\t%016lx\tdep:\t%d\n",
+			(info.currtime), (info.type), (info.tid), (info.size), (void*)(info.ptr), (void*)(info.ptrx), (long unsigned int)(info.ptrlr), info.dep);
+		#endif
 
 		if (isAddr2Symbol)
 		{
@@ -274,7 +285,11 @@ void output_info(int isAddr2Symbol)
 			for (int i = 0; i < info.dep; i++)
 			{
 				void * p = (void *)(info.spinfo[i]);
-				len = sprintf(szSPAddr + offset, "\t%p", p);
+				#if BITLEN==4
+				len = sprintf(szSPAddr + offset, "\t%08x", p);
+				#else
+				len = sprintf(szSPAddr + offset, "\t%016x", p);
+				#endif
 				// if (p)
 				// {
 				// 	len = sprintf(szSPAddr + offset, "\t%p", p);
@@ -318,7 +333,12 @@ void output_info(int isAddr2Symbol)
 					printf("\n");
 				}
 				void * p = (void *)(info.spinfo[i]);
-				printf("\t%p", p);
+				#if BITLEN==4
+				printf("\t%08x", p);
+				#else
+				printf("\t%016x", p);
+				#endif
+				//printf("\t%p", p);
 				// if (p)
 				// {
 				// 	printf("\t%p", p);
@@ -375,8 +395,15 @@ void output_info(int isAddr2Symbol)
 	{
 		info.ptr = 0;
 		info.ptrx = 0;
-		printf("BigSize:\t%d\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%p\tdep:\t%d\n",
-			(info.size), (info.currtime), (info.type), (info.tid), (void*)(info.ptrlr),info.dep);
+		#if BITLEN==4
+		printf("BigSize:\t%d\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%08x\tdep:\t%d\n",
+			(info.size), (info.currtime), (info.type), (info.tid), info.ptrlr,info.dep);
+		#else
+		printf("BigSize:\t%d\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%016lx\tdep:\t%d\n",
+			(info.size), (info.currtime), (info.type), (info.tid), (long unsigned int)(info.ptrlr),info.dep);
+		#endif
+		// printf("BigSize:\t%d\tcurrtime:\t%u\ttype:\t%d\ttid:\t%d\tptrlr:\t%p\tdep:\t%d\n",
+		// 	(info.size), (info.currtime), (info.type), (info.tid), (void*)(info.ptrlr),info.dep);
 
 		if (isAddr2Symbol)
 		{
@@ -385,7 +412,11 @@ void output_info(int isAddr2Symbol)
 			for (int i = 0; i < info.dep; i++)
 			{
 				void * p = (void *)(info.spinfo[i]);
-				len = sprintf(szSPAddr + offset, "\t%p", p);
+				#if BITLEN==4
+				len = sprintf(szSPAddr + offset, "\t%08x", p);
+				#else
+				len = sprintf(szSPAddr + offset, "\t%016x", p);
+				#endif
 				// if (p)
 				// {
 				// 	len = sprintf(szSPAddr + offset, "\t%p", p);
@@ -404,6 +435,7 @@ void output_info(int isAddr2Symbol)
 			//printf("ok.\n");
 			//addrstr2symbol(soniaPath, szSPAddr, symbolBuf, sizeof(symbolBuf));
 			printf("addrlist:%s\n", szSPAddr);
+			g_maps.addr2symbol(info.ptrlr);
 			//printf("%s\n", symbolBuf);
 			for (int i = 0; i < info.dep; i++)
 			{
@@ -421,7 +453,12 @@ void output_info(int isAddr2Symbol)
 					printf("\n");
 				}
 				void * p = (void *)(info.spinfo[i]);
-				printf("\t%p", p);
+				#if BITLEN==4
+				printf("\t%08x", p);
+				#else
+				printf("\t%016x", p);
+				#endif
+				//printf("\t%p", p);
 				// if (p)
 				// {
 				// 	printf("\t%p", p);
@@ -434,7 +471,6 @@ void output_info(int isAddr2Symbol)
 			printf("\n");
 		}
 	}
-	g_maps.printStat();
 
 }
 

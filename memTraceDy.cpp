@@ -83,7 +83,7 @@ typedef enum ENUM_MEMOPTYPE
 const int STACK_DEP = STACK_DEPTH;
 
 
-#define OUTPUT_BUFSIZE_LAST (1024*1024)
+//#define OUTPUT_BUFSIZE_LAST (1024*1024)
 const int BITLEN = sizeof(void *);
 // 结构体大小32位系统为32字节，64位系统为48字节 ，不包含栈深度
 typedef struct __attribute__((packed)) MemLogInfo {
@@ -328,7 +328,7 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 		{
 			fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]malloc g_outputbuf\n",__FUNCTION__, __LINE__, getpid(), gettid());
 			char *outputbuf = NULL;
-			outputbuf = (char *)malloc(OUTPUT_BUFSIZE_LAST);
+			outputbuf = (char *)__libc_malloc(OUTPUT_BUFSIZE_LAST);
 			if(outputbuf == NULL)
 			{
 				fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]=========>malloc failed!\n",__FUNCTION__, __LINE__, getpid(), gettid());
@@ -342,7 +342,7 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 		{
 			fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]malloc g_writebuf\n",__FUNCTION__, __LINE__, getpid(), gettid());
 			char *outputbuf = NULL;
-			outputbuf = (char *)malloc(OUTPUT_BUFSIZE_LAST);
+			outputbuf = (char *)__libc_malloc(OUTPUT_BUFSIZE_LAST);
 			if(outputbuf == NULL)
 			{
 				fprintf(stdout,"[%s:%d][pid:%d][tid:%ld]=========>malloc failed!\n",__FUNCTION__, __LINE__, getpid(), gettid());
@@ -438,8 +438,8 @@ void* threadFunction(void* arg)
 	{
 		updateParam();
 
-		// 30s读取一次
-		sleep(30);
+		// 30s读取一次  config.cfg中配置
+		sleep(TIME_INTERVAL);
 	}
 	fprintf(stdout,"[pid:%d][tid:%ld]--zl:end read param--.\n", getpid(), gettid());
     pthread_exit(NULL);
@@ -601,6 +601,18 @@ void SaveTraceInfo(int optype, void * buf, int len)
 	return;
 }
 
+#ifdef USE_BACKTRACE
+#define copyStack() \
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);\
+		g_outputbuf_pos += logInfo.dep * BITLEN;
+#elif defined(USE_STACK)
+#define copyStack() \
+		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.lp, logInfo.dep * BITLEN);\
+		g_outputbuf_pos += logInfo.dep * BITLEN;
+#else
+#define copyStack()
+#endif
+
 void stacktrace(MemLogInfoEx &logInfoEx)
 {
 	time_t tt;
@@ -635,19 +647,10 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 	//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace0 tid: %d get global\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 	if (logInfo.type >= MEMOP_MALLOC_BIG)
 	{
-#ifndef USE_BACKTRACE
-		logInfo.dep = STACK_DEP;
-#endif
 		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_MALLOC);
 		g_outputbuf_pos += ONE_BUF_SIZE_MALLOC;
-#ifdef USE_BACKTRACE
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);
-		g_outputbuf_pos += logInfo.dep * BITLEN;
-#else
-		fprintf(stdout,"[%s:%d][tid:%ld] type:%d logInfo.dep: %d STACK_DEP:%d\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, logInfo.dep, STACK_DEP);
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.lp, logInfo.dep * BITLEN);
-		g_outputbuf_pos += logInfo.dep * BITLEN;
-#endif
+		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d logInfo.dep: %d STACK_DEP:%d\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, logInfo.dep, STACK_DEP);
+		copyStack();
 		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace00 tid: %d get global wait write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		pthread_mutex_lock(&mwGlobalMutexWrite);
 		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace01 tid: %d get global get write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
@@ -672,27 +675,13 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 	{
 		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_REMALLOC);
 		g_outputbuf_pos += ONE_BUF_SIZE_REMALLOC;
-#ifdef USE_BACKTRACE
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);
-		g_outputbuf_pos += logInfo.dep * BITLEN;
-#else
-		logInfo.dep = STACK_DEP;
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.lp, logInfo.dep * BITLEN);
-		g_outputbuf_pos += logInfo.dep * BITLEN;
-#endif
+		copyStack();
 	}
 	else if (logInfo.type >= MEMOP_MALLOC)
 	{
 		memcpy(g_outputbuf_pos + g_outputbuf, &logInfo, ONE_BUF_SIZE_MALLOC);
 		g_outputbuf_pos += ONE_BUF_SIZE_MALLOC;
-#ifdef USE_BACKTRACE
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.spinfo, logInfo.dep * BITLEN);
-		g_outputbuf_pos += logInfo.dep * BITLEN;
-#else
-		logInfo.dep = STACK_DEP;
-		memcpy(g_outputbuf_pos + g_outputbuf, logInfoEx.lp, logInfo.dep * BITLEN);
-		g_outputbuf_pos += logInfo.dep * BITLEN;
-#endif
+		copyStack();
 	}
 	else
 	{
@@ -700,7 +689,7 @@ void stacktrace(MemLogInfoEx &logInfoEx)
 		g_outputbuf_pos += ONE_BUF_SIZE_FREE;
 	}
 
-	if(g_outputbuf_pos > 0 && (currtime > g_lasttime + 30 || (g_outputbuf_pos >= TOTAL_LEN)))
+	if(g_outputbuf_pos > 0 && (currtime > g_lasttime + TIME_INTERVAL_WRITE || (g_outputbuf_pos >= TOTAL_LEN)))
 	{
 		//fprintf(stdout,"[%s:%d][tid:%ld] type:%d stacktrace4 tid: %d get global waite write\n",__FUNCTION__, __LINE__, syscall(SYS_gettid), logInfo.type, tid);
 		pthread_mutex_lock(&mwGlobalMutexWrite);
@@ -787,8 +776,11 @@ size_t getMallocSize(void *ptr)
 		/*	fprintf(stdout,"[%s:%d][tid:%ld] frame %d: %s\n", __FUNCTION__, __LINE__, gettid(), i, strs[i]);*/\
 		/*}*/\
 		/*free(strs);*/
+#elif defined(USE_STACK)
+#define Trace() logInfoEx.lp = &result;\
+	logInfo.dep = STACK_DEP;
 #else
-#define Trace() logInfoEx.lp = &result;
+#define Trace()
 #endif
 
 #if defined(USE_ALL) || defined(USE_SIZE)

@@ -24,6 +24,7 @@ public:
 
 private:
     map<void *, MemoryRegion> m_mapMemoryRegions;
+    map<void *, string> m_mapAddr;
     string m_execPath;
     string m_cross;
     string m_mapsPath;

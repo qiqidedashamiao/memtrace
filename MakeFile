@@ -3,12 +3,12 @@ include config.cfg
 
 TARGET = libpreload.so
 
-CPP	= $(CROSS)g++
-CC	= $(CROSS)gcc
-LD	= $(CROSS)ld
-AR  = $(CROSS)ar
+CPP	= $(CROSS_)g++
+CC	= $(CROSS_)gcc
+LD	= $(CROSS_)ld
+AR  = $(CROSS_)ar
 RM	= rm -f
-STRIP = $(CROSS)strip
+STRIP = $(CROSS_)strip
 
 #源文件
 SRC = memTraceDy.cpp
@@ -61,6 +61,11 @@ ifeq ($(USE_BACKTRACE),true)
 	CFLAGS += -DUSE_BACKTRACE
 endif
 
+#如果使用USE_STACK，则增加宏USE_STACK
+ifeq ($(USE_STACK),true)
+	CFLAGS += -DUSE_STACK
+endif
+
 #如果USE_ALLOC为true，则增加宏USE_ALLOC
 ifeq ($(USE_ALL),true)
 	CFLAGS += -DUSE_ALL
@@ -98,6 +103,15 @@ endif
 ifneq ($(PATH_PARAM),)
 	CFLAGS += -DPATH_PARAM=$(PATH_PARAM)
 endif
+
+#增加宏OUTPUT_BUFSIZE_LAST
+CFLAGS += -DOUTPUT_BUFSIZE_LAST=$(OUTPUT_BUFSIZE_LAST)
+
+#增加宏TIME_INTERVAL
+CFLAGS += -DTIME_INTERVAL=$(TIME_INTERVAL)
+
+#增加宏TIME_INTERVAL_WRITE
+CFLAGS += -DTIME_INTERVAL_WRITE=$(TIME_INTERVAL_WRITE)
 
 
 all: $(TARGET)

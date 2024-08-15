@@ -57,6 +57,9 @@ ifneq ($(PATH_LIST),)
 	CFLAGS += -DPATH_LIST=$(PATH_LIST)
 endif
 
+#增加宏 BITLEN
+CFLAGS += -DBITLEN=$(BITLEN)
+
 all: clean $(TARGET)
 
 pre:

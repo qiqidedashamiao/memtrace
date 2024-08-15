@@ -6,6 +6,12 @@
 
 #include "maps.h"
 
+// std::string formatPointerAddress(void* ptr) {
+//     std::stringstream ss;
+//     ss << "0x" << std::setw(BITLEN) << std::setfill('0') << std::hex << reinterpret_cast<uintptr_t>(ptr);
+//     return ss.str();
+// }
+
 Maps::Maps():m_execPath(""), m_cross(""), m_bASLR(false)
 {
     
@@ -53,7 +59,7 @@ void Maps::setMapsPath(const string mapsPath)
             char offset[32];
             char device[32];
             char inode[32];
-            char pathname[32];
+            char pathname[64];
             // 解析maps文件的一行 map格式00400000-0040a000 r-xp 00000000 fd:00 42082                              /root/mount/share/memtrace/sonia
             sscanf(buffer, "%p-%p %s %s %s %s %s", &region.start, &region.end, permission, offset, device, inode, pathname);
             int index = line.find_last_of("/");
@@ -106,6 +112,11 @@ bool Maps::isExist(void *address)
 
 void Maps::addr2symbol(void * addr)
 {
+    if (m_mapAddr.find(addr) != m_mapAddr.end())
+    {
+        printf("%s", m_mapAddr[addr].c_str());
+        return;
+    }
     MemoryRegion region;
     char symbolBuf[40960] = {0};
     if (findMemoryRegion(addr, region))
@@ -122,10 +133,13 @@ void Maps::addr2symbol(void * addr)
         fread(symbolBuf, sizeof(char), sizeof(symbolBuf), stream);
         pclose(stream);
         printf("%s", symbolBuf);
+        m_mapAddr[addr] = symbolBuf;
     }
     else if (region.end != NULL)
     {
-        printf("%p\n", addr);
+        printf("0x%lx\n", (unsigned long)addr - (unsigned long)region.start);
+        //m_mapAddr[addr] = formatPointerAddress(addr);
+        //printf("%s\n", m_mapAddr[addr].c_str());
     }
 }
 
