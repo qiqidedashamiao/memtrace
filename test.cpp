@@ -234,6 +234,29 @@ int main(int argc, char** argv) {
 
     cout << "[tid:" << gettid() << "]" << "main create thread" << endl;
 
+    cout << "请输入数字：0：结束 1：不结束" << endl;
+
+    while(1)
+    {
+        int input;
+        std::cin >> input;
+        if (input == 0)
+        {
+            cout << "结束" << endl;
+            return 0;
+        }
+        else if (input == 1)
+        {
+            cout << "不结束" << endl;
+            continue;
+        }
+        else
+        {
+            cout << "输入错误" << endl;
+            continue;
+        }
+    }
+
     // 创建线程
     for (int i = 0; i < numThreads; ++i) {
         threads.push_back(std::thread(allocateAndFreeMemory, i));
