@@ -3,20 +3,6 @@ import sys
 import subprocess
 import importlib.util
 
-def installPipModule(module):
-    if importlib.util.find_spec(module) is not None:
-        return
-    print(f"\n{module}模块未安装，先安装{module}模块\n")
-    try:
-        cmd = f"pip install {module}"
-        print(cmd)
-        subprocess.call(cmd, shell=True)
-    except subprocess.CalledProcessError as e:
-        print(f"\n安装{module}模块时异常：\n", e.output)
-        sys.exit(1)
-    print(f"\n{module}模块安装成功\n")
-
-
 # 先安装fabric模块
 #installPipModule("qrcode")
 #installPipModule("Image")
@@ -52,6 +38,14 @@ def generate_qr_in_console(data):
 # 要展示的数据
 data = "aaaaaa"
 
-# 生成并在控制台展示二维码
-generate_qr_in_console(data)
+user_input = input("请输入shell:")
+if user_input == "shell":
+    username = input("请输入用户名：")
+    # 生成并在控制台展示二维码
+    generate_qr_in_console(username)
+    password = input("请输入密码：")
+
+
+
+
 

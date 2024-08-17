@@ -14,3 +14,5 @@ parselog.txt
 list.txt
 1
 memory-2024*
+__pycache__
+

@@ -1,169 +1,121 @@
 import io
 from logging import warn
+import logging
 from threading import local
 import sys
 import subprocess
 import time
-import importlib.util
 import paramiko
 import sys
 import io
 import time
 from PIL import Image
+import tkinter as tk
 
-#安装module
-def installPipModule(module):
-    if importlib.util.find_spec(module) is not None:
-        return
-    print(f"\n{module}模块未安装，先安装{module}模块\n")
-    try:
-        cmd = f"pip install {module}"
-        print(cmd)
-        subprocess.call(cmd, shell=True)
-    except subprocess.CalledProcessError as e:
-        print(f"\n安装{module}模块时异常：\n", e.output)
-        sys.exit(1)
-    print(f"\n{module}模块安装成功\n")
+from cmd_meminfo import MemInfoCmd
+from localutil import parse_ascii_to_image, trim_binary_data
+from gui_app import ConfigApp
 
-# # 先安装fabric模块
-# installPipModule("fabric")
-# from fabric import Connection
+#定义一个ssh连接类，包含创建连接，登录，定时获取内存信息等功能
+class SSHConnection:
+    def __init__(self, host, username, password):
+        self.host = host
+        self.username = username
+        self.password = password
+        self.client = None
+        self.shell = None
+        self.cmdObj = MemInfoCmd()
+        self.connect()
+        self.start()
 
-# 设置默认编码为utf-8
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    def connect(self):
+        try:
+            self.client = paramiko.SSHClient()
+            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self.client.connect(self.host, username=self.username, password=self.password)
+            # 使用invoke_shell创建交互式shell会话
+            self.shell = self.client.invoke_shell()
+            self.shell = self.client.invoke_shell()
+            self.login()
+            return True
+        except Exception as e:
+            print(f"远程节点创建失败，错误信息: {e}")
+            sys.exit(1)
+            return False
+        
+    def login(self):
+        # 读取初始提示符
+        time.sleep(1)
+        if self.shell.recv_ready():
+            output = self.shell.recv(1024).decode('utf-8')
+            print(output)
+        
+        self.shell.send('python3 /root/mount/share/memtrace/server/erweima.py' + '\n')
 
-def genRemoteConnectionFunc(host, username, password):
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(host, username=username, password=password)
-    return client
+        # 输入shell命令
+        user_input = "shell"
+        self.shell.send(user_input + '\n')
+        # 等待命令执行完成并读取输出
+        time.sleep(2)
+        if self.shell.recv_ready():
+            output = self.shell.recv(1024).decode('utf-8')
+            print(output)
+        # 输入用户名
+        #username = "234646"
+        #self.shell.send(username + '\n')
+        self.shell.send(self.username + '\n')
+        # 读取二维码
+        time.sleep(1)
+        if self.shell.recv_ready():
+            output = self.shell.recv(8192)
+            output = trim_binary_data(output)
+            output = output.decode('utf-8')
+            print(output)
+            #输出output的大小
+            print(len(output))
+            # 将 ASCII 图案转为图片，可行
+            img = parse_ascii_to_image(output)
+            img.show()
+        # 输入密码
+        print("请输入密码：")
+        password = "pass"
+        #self.shell.send(username + password + '\n')
+        self.shell.send(self.username + self.password + '\n')
 
-try:
-    remote = genRemoteConnectionFunc("192.168.0.14", "root", "Aa1234561")
-    print("远程节点连接创建成功")
-except Exception as e:
-    print(f"远程节点创建失败，错误信息: {e}")
-    sys.exit(1)
+        # 等待命令执行完成并读取输出
+        time.sleep(3)
+        if self.shell.recv_ready():
+            output = self.shell.recv(1024).decode('utf-8')
+            print(output)
 
-# 使用invoke_shell创建交互式shell会话
-shell = remote.invoke_shell()
+    def close(self):
+        self.cmdObj.stop()
+        if self.client:
+            print("\n开始关闭远程连接......\n")
+            self.client.close()
+            print("\n远程连接关闭成功\n")
+        else:
+            print("\n远程连接已关闭，无需手动关闭\n")
 
-# 读取初始提示符
-time.sleep(1)
-if shell.recv_ready():
-    output = shell.recv(1024).decode('utf-8')
-    print(output)
+    def start(self):
+        self.cmdObj.start(self.shell)
 
-# shell.send("/root/mount/share/memtrace/sonia" + '\n')
+if __name__ == '__main__':
+    #pass
+    # 设置默认编码为utf-8
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    # 配置日志记录
+    logging.basicConfig(level=logging.INFO)
+    # ssh = SSHConnection("192.168.0.14", "root", "Aa1234561")
+    # user_input = input("请输入结束字符exit：")
+    # # 关闭MemInfoCmd中的定时器
+    # if user_input == "exit":
+    #     ssh.close()
 
-# # 读取初始提示符
-# time.sleep(1)
-# if shell.recv_ready():
-#     output = shell.recv(1024).decode('utf-8')
-#     print(output)
+    root = tk.Tk()
+    app = ConfigApp(root)
+    root.mainloop()
 
-# # 输入命令
-# user_input = input()
-# shell.send(user_input + '\n')
-
-# # 等待命令执行完成并读取输出
-# time.sleep(2)
-# if shell.recv_ready():
-#     output = shell.recv(1024).decode('utf-8')
-#     print(output)
-
-
-# 将ASCII二维码转换为图像
-def parse_ascii_to_image(ascii_data):
-    # 按行拆分 ASCII 数据
-    lines = ascii_data.splitlines()
-
-    # 确定图像大小
-    width, height = len(lines[0]), len(lines)
-
-    print(width, height)
-
-    # 创建黑白图片
-    img = Image.new('1', (width, height*2), color=1)  # '1'模式是1位黑白图像
-    pixels = img.load()
-
-    # 填充图像像素 0 黑色 1 白色
-    color1 = 1
-    color2 = 0
-    for y, line in enumerate(lines):
-        for x, char in enumerate(line):
-            index = y*2
-            if char == '█':
-                pixels[x,index] = color1 
-                pixels[x, index+1] = color1
-            elif char == '▀':
-                pixels[x, index] = color1  # （显示上半部分）
-                pixels[x, index+1] = color2  # （显示下半部分）
-            elif char == '▄':
-                pixels[x,index] = color2  # （显示上半部分）
-                pixels[x, index+1] = color1  # （显示下半部分）
-            elif char == ' ':  # 不间断空格
-                pixels[x, index] = color2  
-                pixels[x, index+1] = color2
-    
-    # 放大图像
-    scale = 30
-    new_width, new_height = width * scale, height * scale
-    img = img.resize((new_width, new_height), Image.NEAREST)  # NEAREST用于放大时保持像素的锐利边缘
-
-    return img
-
-#二进制数据中截取掉第一个\r\n前的数据以及最后一个\r\n后的数据
-def trim_binary_data(binary_data):
-    # 查找第一个 \r\n 的位置
-    first_crlf_pos = binary_data.find(b'\r\n')
-    
-    # 查找最后一个 \r\n 的位置
-    last_crlf_pos = binary_data.rfind(b'\r\n')
-
-    # 如果找到了 \r\n, 则进行截取
-    if first_crlf_pos != -1 and last_crlf_pos != -1 and first_crlf_pos != last_crlf_pos:
-        # 截取第一个 \r\n 后和最后一个 \r\n 前的数据
-        trimmed_data = binary_data[first_crlf_pos + 2:last_crlf_pos]
-        return trimmed_data
-    else:
-        # 如果没有找到，或数据无效，返回原数据
-        return binary_data
-
-
-shell.send('python3 /root/mount/share/memtrace/server/erweima.py' + '\n')
-
-
-# 读取初始提示符
-time.sleep(1)
-if shell.recv_ready():
-    output = shell.recv(8192)
-    #返回的二进制数据中截取掉''python3 /root/mount/share/memtrace/server/erweima.py\r\n'
-    #output = output[len('python3 /root/mount/share/memtrace/server/erweima.py\r\n'):]
-    
-    #返回的二进制数据中截取掉尾部的[root@vm14 ~]# 
-    #output = output[:-len('\r\n[root@vm14 ~]# ')]
-
-    #返回的二进制数据中截取掉第一个\r\n前的数据以及最后一个\r\n后的数据
-    output = trim_binary_data(output)
-    
-    output = output.decode('utf-8')
-    print(output)
-    #输出output的大小
-    print(len(output))
-    
-    # 将 ASCII 图案转为图片，可行
-    img = parse_ascii_to_image(output)
-    img.show()  # 展示图像
-
-
-# 关闭远程连接
-if remote:
-    print("\n开始关闭远程连接......\n")
-    remote.close()
-    print("\n远程连接关闭成功\n")
-else:
-    print("\n远程连接已关闭，无需手动关闭\n")
 
 
 
