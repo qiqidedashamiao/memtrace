@@ -7,10 +7,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 class MemInfoCmd:
-    def __init__(self):
+    def __init__(self,device_config):
         logging.info(f"init MemInfoCmd")
         self.shell = None
-        self.interval = 1
+        self.interval = 1   #默认1s
+        if "device_interval" in device_config:
+            self.interval = device_config["device_interval"]
         self.meminfo = []
 
         # self.timer = None

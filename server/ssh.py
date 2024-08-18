@@ -5,12 +5,14 @@ from threading import local
 import sys
 import subprocess
 import time
+from tkinter import simpledialog
+import numpy as np
+import matplotlib.pyplot as plt
 import paramiko
 import sys
 import io
 import time
 from PIL import Image
-import tkinter as tk
 import cv2
 from pyzbar import pyzbar
 
@@ -18,19 +20,19 @@ import qrcode
 
 from cmd_meminfo import MemInfoCmd
 from localutil import parse_ascii_to_image, trim_binary_data
-from gui_app import ConfigApp
 
 #定义一个ssh连接类，包含创建连接，登录，定时获取内存信息等功能
 class SSHConnection:
-    def __init__(self, host, username, password):
-        self.host = host
-        self.username = username
-        self.password = password
+    def __init__(self, device_config):
+        self.host = device_config["host"]
+        self.username = device_config["username"]
+        self.password = device_config["password"]
+        logging.info(f"host:{self.host}, username:{self.username}, password:{self.password}")
         self.client = None
         self.shell = None
-        self.cmdObj = MemInfoCmd()
+        self.cmdObj = MemInfoCmd(device_config)
         self.connect()
-        #self.start()
+        self.start()
 
     def connect(self):
         try:
@@ -43,7 +45,8 @@ class SSHConnection:
             self.login()
             return True
         except Exception as e:
-            print(f"远程节点创建失败，错误信息: {e}")
+            logging.error(f"远程节点创建失败，错误信息: {e}")
+            #print(f"远程节点创建失败，错误信息: {e}")
             sys.exit(1)
             return False
         
@@ -52,7 +55,8 @@ class SSHConnection:
         time.sleep(1)
         if self.shell.recv_ready():
             output = self.shell.recv(1024).decode('utf-8')
-            print(output)
+            logging.info(f"{output}")
+            #print(output)
         
         self.shell.send('python3 /root/mount/share/memtrace/server/erweima.py' + '\n')
 
@@ -60,14 +64,16 @@ class SSHConnection:
         user_input = "shell"
         self.shell.send(user_input + '\n')
         # 等待命令执行完成并读取输出
-        time.sleep(2)
+        time.sleep(1)
         if self.shell.recv_ready():
             output = self.shell.recv(1024).decode('utf-8')
-            print(output)
+            logging.info(f"{output}")
+            #print(output)
         # 输入用户名
         #username = "234646"
         #self.shell.send(username + '\n')
         self.shell.send(self.username + '\n')
+        img = None
         # 读取二维码
         time.sleep(1)
         if self.shell.recv_ready():
@@ -79,7 +85,7 @@ class SSHConnection:
             print(len(output))
             # 将 ASCII 图案转为图片，可行
             img = parse_ascii_to_image(output)
-            img.show()
+            #img.show()
             # 保存图片为png格式
             img.save('qrcode.png')
             image = Image.open('qrcode.png')
@@ -89,52 +95,55 @@ class SSHConnection:
             # 使用 pyzbar 库解码二维码
             decoded_objects = pyzbar.decode(image)
             for obj in decoded_objects:
-                print("二维码内容:", obj.data.decode("utf-8"))
-                print("二维码类型:", obj.type)
+                logging.info(f"二维码内容:{obj.data.decode('utf-8')}")
+                logging.info(f"二维码类型:{obj.type}")
+                #print("二维码内容:", obj.data.decode("utf-8"))
+                #print("二维码类型:", obj.type)
 
             if not decoded_objects:
-                print("未检测到二维码")
+                logging.info(f"未检测到二维码")
+                #print("未检测到二维码")
             
+        # 使用matplotlib显示
+        plt.imshow(np.array(img))
+        plt.axis('off')  # 关闭坐标轴显示
+        plt.show(block=False)  
         # 输入密码
-        print("请输入密码：")
-        password = "pass"
+        logging.info(f"输入密码")
+        #print("请输入密码：")
+        # 使用simpledialog来获取用户输入的验证码
+        password = simpledialog.askstring("验证码", "请输入验证码：")
+        # 延迟几秒后自动关闭
+        #plt.pause(3)
+        plt.close()  
+        #password = "pass"
         #self.shell.send(username + password + '\n')
-        self.shell.send(self.username + self.password + '\n')
+        #logging.info(f "验证码：{self.username}{password}")
+        logging.info(f"验证码：{self.username}{password}")
+        self.shell.send(self.username + password + '\n')
 
         # 等待命令执行完成并读取输出
-        time.sleep(3)
+        time.sleep(1)
         if self.shell.recv_ready():
             output = self.shell.recv(1024).decode('utf-8')
-            print(output)
+            logging.info(f"{output}")
+            #print(output)
 
     def close(self):
         self.cmdObj.stop()
         if self.client:
-            print("\n开始关闭远程连接......\n")
+            logging.info(f"开始关闭远程连接......")
+            #print("\n开始关闭远程连接......\n")
             self.client.close()
-            print("\n远程连接关闭成功\n")
+            logging.info(f"远程连接关闭成功")
+            #print("\n远程连接关闭成功\n")
         else:
-            print("\n远程连接已关闭，无需手动关闭\n")
+            logging.info(f"远程连接已关闭，无需手动关闭")
+            #print("\n远程连接已关闭，无需手动关闭\n")
 
     def start(self):
         self.cmdObj.start(self.shell)
 
-if __name__ == '__main__':
-    #pass
-    # 设置默认编码为utf-8
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    # 配置日志记录
-    logging.basicConfig(level=logging.INFO)
-
-    # ssh = SSHConnection("192.168.0.14", "root", "Aa1234561")
-    # user_input = input("请输入结束字符exit：")
-    # # 关闭MemInfoCmd中的定时器
-    # if user_input == "exit":
-    #     ssh.close()
-
-    root = tk.Tk()
-    app = ConfigApp(root)
-    root.mainloop()
 
 
 

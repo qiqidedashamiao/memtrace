@@ -1,16 +1,25 @@
 
 import json
+import logging
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 
+from ssh import SSHConnection
+
 class ConfigApp:
+    m_config_data = {}
+    m_ssh_memory = None
     def __init__(self, root):
         self.load_config()
         self.root = root
         self.root.title("tool")
 
         self.root.geometry("800x600")
+
+        # 在窗口关闭事件时，调用on_closing函数
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
         menu_bar = tk.Menu(root)
         menu_bar.grid_rowconfigure(0, minsize=20)  # 使菜单栏填充整个窗口
         #没发现用途
@@ -34,7 +43,15 @@ class ConfigApp:
 
         # 创建“工具”菜单
         tool_menu = tk.Menu(menu_bar, tearoff=0)
-        tool_menu.add_command(label="内存变化", command=self.on_tool_option)
+
+        # 创建“内存变化”子菜单
+        memory_change_menu = tk.Menu(tool_menu, tearoff=0)
+        memory_change_menu.add_command(label="启动", command=self.on_memory_start)
+        memory_change_menu.add_command(label="停止", command=self.on_memory_stop)
+
+        # 将“内存变化”子菜单添加到“工具”菜单中
+        tool_menu.add_cascade(label="内存变化", menu=memory_change_menu)
+        #tool_menu.add_command(label="内存变化", command=self.on_tool_option)
         tool_menu.add_command(label="内存使用", command=self.on_tool_option)
 
         # 将“配置”和“工具”菜单添加到菜单栏
@@ -63,18 +80,46 @@ class ConfigApp:
         tk.Button(root, text="保存配置", command=self.save_config).grid(row=3, column=0, pady=10)
         tk.Button(root, text="退出", command=root.quit).grid(row=3, column=1, pady=10)
 
+    def on_closing(self):
+        # 关闭SSH连接
+        if self.m_ssh_memory is not None:
+            self.m_ssh_memory.close()
+        # 关闭Tkinter窗口
+        self.root.destroy()
+
+    def on_memory_start(self):
+        if self.m_ssh_memory is not None:
+            messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
+        else:
+            messagebox.showinfo("内存变化", "内存变化启动")
+            self.m_ssh_memory = SSHConnection(self.m_config_data["device"])
+
+    def on_memory_stop(self):
+        messagebox.showinfo("内存变化", "内存变化停止")
+        if self.m_ssh_memory is not None:
+            self.m_ssh_memory.close()
+            self.m_ssh_memory = None
+
     def load_config(self):
         """从配置文件加载内容"""
         try:
             with open("config.json", "r") as config_file:
-                self.config_data = json.load(config_file)
+                self.m_config_data = json.load(config_file)
         except FileNotFoundError:
             # 如果文件不存在，使用默认值
-            self.config_data = {
-                "device_ip": "",
-                "device_username": "",
-                "device_password": "",
-                "device_interval": ""
+            self.m_config_data = {
+                "device": {
+                "host": "",
+                "username": "",
+                "password": "",
+                "interval": 1
+                },
+                "server": {
+                "ip": "",
+                "username": "",
+                "password": "",
+                "cross": ""
+                }
             }
 
     def on_configure_option(self):
@@ -113,16 +158,18 @@ class ConfigApp:
         
         #在“设备配置”界面中添加控件
         devicetextlist = ["IP:", "用户名:", "密码:", "采样时间:"]
-        devicename = ["device_ip", "device_username", "device_password", "device_interval"]
+        devicename = ["host", "username", "password", "interval"]
         device_entry = {}  # Define the device_entry dictionary
+        device_key = "device"
         for i in range(len(devicetextlist)):
             ttk.Label(device_frame, text=devicetextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
             device_entry[i] = ttk.Entry(device_frame, font=font_large)
             device_entry[i].grid(row=i, column=1, padx=10, pady=10, sticky="sw")  # Use device_entry[i] instead of device_ip_entry
-            device_entry[i].insert(0, self.config_data.get(devicename[i], ""))  # Set default value
+            if devicename[i] in self.m_config_data[device_key]:
+                device_entry[i].insert(0, self.m_config_data[device_key].get(devicename[i]))  # Set default value
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
-        ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window,devicename), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window,devicename,device_key), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
         #ttk.Button(device_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
         ttk.Button(device_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
@@ -140,17 +187,19 @@ class ConfigApp:
 
         # 在“编译服务器配置”界面中添加控件
         servertextlist = ["IP:", "用户名:", "密码:", "交叉编译链:"]
-        servername = ["server_ip", "server_username", "server_password", "server_cross"]
+        servername = ["ip", "username", "password", "cross"]
         server_entry = {}  # Define the server_entry dictionary
+        server_key = "server"
         for i in range(len(servertextlist)):
             ttk.Label(server_frame, text=servertextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
             server_entry[i] = ttk.Entry(server_frame, font=font_large)
             server_entry[i].grid(row=i, column=1, padx=10, pady=10, sticky="sw")
-            server_entry[i].insert(0, self.config_data.get(servername[i], ""))
+            if servername[i] in self.m_config_data[server_key]:
+                server_entry[i].insert(0, self.m_config_data[server_key].get(servername[i], ""))
 
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
-        ttk.Button(server_frame, text="保存", command=lambda: self.save_config_device(server_entry,config_window,servername), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        ttk.Button(server_frame, text="保存", command=lambda: self.save_config_device(server_entry,config_window,servername,server_key), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
         #ttk.Button(device_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
         ttk.Button(server_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
@@ -160,7 +209,7 @@ class ConfigApp:
 
         #messagebox.showinfo("配置选项", "配置选项被点击")
     
-    def save_config_device(self, device_entry, config_window,name):
+    def save_config_device(self, device_entry, config_window,name,key):
         """保存输入内容到配置文件"""
         # config_data = {
         #     "device_ip": device_entry[0].get(),
@@ -168,12 +217,15 @@ class ConfigApp:
         #     "device_password": device_entry[2].get(),
         #     "device_interval": device_entry[3].get()
         # }
-        config_data = {name[i]: device_entry[i].get() for i in range(len(device_entry))}
+        config_data = {}
+        config_data[key] = {name[i]: device_entry[i].get() for i in range(len(device_entry))}
+        logging.info(f"config_data: {config_data}")
 
-        self.config_data.update(config_data)
+        self.m_config_data.update(config_data)
+        #logging.info(f"m_config_data: {self.m_config_data}")
 
         with open("config.json", "w") as config_file:
-            json.dump(self.config_data, config_file, indent=4)
+            json.dump(self.m_config_data, config_file, indent=4)
         
         # 展示配置结果，这里可以修改为弹窗提示
         messagebox.showinfo("配置保存",config_data)
