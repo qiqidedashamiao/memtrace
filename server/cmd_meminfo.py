@@ -1,5 +1,7 @@
 #增加一个命令类，输入参数为连接的shell对象，定时执行cat /proc/meminfo命令，获取内存信息
+from datetime import datetime
 import logging
+import os
 import sched
 import threading
 import time
@@ -8,7 +10,17 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 class MemInfoCmd:
     def __init__(self,device_config):
-        logging.info(f"init MemInfoCmd")
+        # 将当前时间格式化为字符串
+        current_time = datetime.now()
+        self.time_str = current_time.strftime("%Y-%m-%d %H-%M-%S")
+        self.logger = logging.getLogger("master")
+        self.logger.info(f"init MemInfoCmd")
+        #如果目录data/meminfo不存在，则递归创建目录
+        # 定义目录路径
+        directory = "data/meminfo"
+        os.makedirs(directory, exist_ok=True)
+        with open(f"data/meminfo/meminfo-{self.time_str}.txt", "a") as f:
+            pass
         self.shell = None
         self.interval = 1   #默认1s
         if "device_interval" in device_config:
@@ -21,7 +33,7 @@ class MemInfoCmd:
         self.scheduler = BackgroundScheduler()
 
     def start(self, shell):
-        logging.info(f"start")
+        self.logger.info(f"start")
         self.shell = shell
 
         # self.timer = threading.Timer(self.interval, self.get_meminfo)
@@ -32,16 +44,28 @@ class MemInfoCmd:
         self.scheduler.add_job(self.get_meminfo, IntervalTrigger(seconds=self.interval))
 
     def get_meminfo(self):
-        logging.info(f"send cmd")
+        self.logger.info(f"send cmd")
         self.shell.send("cat /proc/meminfo\n")
         time.sleep(1)
         if self.shell.recv_ready():
             output = self.shell.recv(8192)
             #output = trim_binary_data(output)
             output = output.decode('utf-8')
-            logging.debug(f"{output}")
+            self.logger.debug(f"{output}")
             #print(output)
-            self.meminfo.append(output)
+            # 获取当前时间并格式化为字符串
+            current_time = datetime.now()
+            current_time_str = current_time.strftime("%H:%M:%S")
+            #加上毫秒格式
+            #current_time_str += f".{current_time.microsecond // 1000}"
+
+            # 将每一行添加时间戳，并生成新的内容
+            output_with_timestamp = "\n".join([f"[{current_time_str}] {line}" for line in output.splitlines()])
+            #将接收到的数据写入到目录/data/meminfo/meminfo-time.txt文件中
+            with open(f"data/meminfo/meminfo-{self.time_str}.txt", "a") as f:
+                f.write(output_with_timestamp)
+
+            #self.meminfo.append(output)
 
         # if self.is_running:
         #     self.timer = threading.Timer(self.interval, self.get_meminfo)
