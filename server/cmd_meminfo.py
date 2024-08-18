@@ -39,7 +39,7 @@ class MemInfoCmd:
             output = self.shell.recv(8192)
             #output = trim_binary_data(output)
             output = output.decode('utf-8')
-            logging.info(f"{output}")
+            logging.debug(f"{output}")
             #print(output)
             self.meminfo.append(output)
 

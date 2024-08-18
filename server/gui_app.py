@@ -4,6 +4,7 @@ import logging
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
+from tkinter import scrolledtext
 
 from ssh import SSHConnection
 
@@ -59,26 +60,45 @@ class ConfigApp:
         menu_bar.add_cascade(label="工具", menu=tool_menu, font=("Arial", 14))
         #menu_bar.entryconfig("选项", padding=20)
 
+         # 创建日志显示区域
+        self.log_display = scrolledtext.ScrolledText(root, width=80, height=20, state='disabled', wrap='word')
+        self.log_display.grid(row=0, column=0, padx=10, pady=10)
+        # # 设置日志记录
+        self.setup_logging()
+
         # 将菜单栏设置为主窗口的菜单
         root.config(menu=menu_bar)
 
-        # 创建标签
-        tk.Label(root, text="内存信息").grid(row=0, column=0, sticky="w")
-        tk.Label(root, text="CPU信息").grid(row=1, column=0, sticky="w")
-        tk.Label(root, text="磁盘使用情况").grid(row=2, column=0, sticky="w")
+    def setup_logging(self):
+        """设置日志记录器，将日志输出到Text控件中"""
+        self.logger = logging.getLogger("master")
+        self.logger.setLevel(logging.INFO)
 
-        # 创建复选框
-        self.meminfo_var = tk.BooleanVar()
-        self.cpuinfo_var = tk.BooleanVar()
-        self.diskinfo_var = tk.BooleanVar()
+        # 创建处理器，将日志输出到Text控件中
+        self.log_handler = logging.StreamHandler(self)
+        self.log_handler.setLevel(logging.INFO)
 
-        tk.Checkbutton(root, text="启用", variable=self.meminfo_var).grid(row=0, column=1)
-        tk.Checkbutton(root, text="启用", variable=self.cpuinfo_var).grid(row=1, column=1)
-        tk.Checkbutton(root, text="启用", variable=self.diskinfo_var).grid(row=2, column=1)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        self.log_handler.setFormatter(formatter)
 
-        # 创建配置按钮
-        tk.Button(root, text="保存配置", command=self.save_config).grid(row=3, column=0, pady=10)
-        tk.Button(root, text="退出", command=root.quit).grid(row=3, column=1, pady=10)
+        self.logger.addHandler(self.log_handler)
+
+    def write(self, message):
+        """将日志写入Text控件"""
+        self.log_display.configure(state='normal')
+        self.log_display.insert(tk.END, message + '\n')
+        self.log_display.configure(state='disabled')
+        self.log_display.yview(tk.END)  # 自动滚动到最后一行
+
+    def flush(self):
+        pass  # 这个方法是处理器接口的一部分，通常可以不需要实现
+
+    def simulate_logging(self):
+        """模拟日志信息的产生"""
+        while True:
+            self.logger.info("模拟日志信息")
+            time.sleep(2)
+
 
     def on_closing(self):
         # 关闭SSH连接
@@ -219,7 +239,7 @@ class ConfigApp:
         # }
         config_data = {}
         config_data[key] = {name[i]: device_entry[i].get() for i in range(len(device_entry))}
-        logging.info(f"config_data: {config_data}")
+        self.logger.info(f"config_data: {config_data}")
 
         self.m_config_data.update(config_data)
         #logging.info(f"m_config_data: {self.m_config_data}")
@@ -228,7 +248,7 @@ class ConfigApp:
             json.dump(self.m_config_data, config_file, indent=4)
         
         # 展示配置结果，这里可以修改为弹窗提示
-        messagebox.showinfo("配置保存",config_data)
+        messagebox.showinfo("配置保存","保存成功")
 
         # 提升配置界面到最前面
         config_window.lift()

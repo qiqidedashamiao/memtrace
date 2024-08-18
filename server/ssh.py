@@ -24,10 +24,11 @@ from localutil import parse_ascii_to_image, trim_binary_data
 #定义一个ssh连接类，包含创建连接，登录，定时获取内存信息等功能
 class SSHConnection:
     def __init__(self, device_config):
+        self.logger = logging.getLogger("master")
         self.host = device_config["host"]
         self.username = device_config["username"]
         self.password = device_config["password"]
-        logging.info(f"host:{self.host}, username:{self.username}, password:{self.password}")
+        self.logger.info(f"host:{self.host}, username:{self.username}, password:{self.password}")
         self.client = None
         self.shell = None
         self.cmdObj = MemInfoCmd(device_config)
@@ -45,7 +46,7 @@ class SSHConnection:
             self.login()
             return True
         except Exception as e:
-            logging.error(f"远程节点创建失败，错误信息: {e}")
+            self.logger.error(f"远程节点创建失败，错误信息: {e}")
             #print(f"远程节点创建失败，错误信息: {e}")
             sys.exit(1)
             return False
@@ -55,7 +56,7 @@ class SSHConnection:
         time.sleep(1)
         if self.shell.recv_ready():
             output = self.shell.recv(1024).decode('utf-8')
-            logging.info(f"{output}")
+            self.logger.info(f"{output}")
             #print(output)
         
         self.shell.send('python3 /root/mount/share/memtrace/server/erweima.py' + '\n')
@@ -67,7 +68,7 @@ class SSHConnection:
         time.sleep(1)
         if self.shell.recv_ready():
             output = self.shell.recv(1024).decode('utf-8')
-            logging.info(f"{output}")
+            self.logger.info(f"{output}")
             #print(output)
         # 输入用户名
         #username = "234646"
@@ -80,9 +81,11 @@ class SSHConnection:
             output = self.shell.recv(8192*2)
             output = trim_binary_data(output)
             output = output.decode('utf-8')
-            print(output)
+            self.logger.debug(f"{output}")
+            #print(output)
             #输出output的大小
-            print(len(output))
+            self.logger.debug(f"output size:{len(output)}")
+            #print(len(output))
             # 将 ASCII 图案转为图片，可行
             img = parse_ascii_to_image(output)
             #img.show()
@@ -95,13 +98,13 @@ class SSHConnection:
             # 使用 pyzbar 库解码二维码
             decoded_objects = pyzbar.decode(image)
             for obj in decoded_objects:
-                logging.info(f"二维码内容:{obj.data.decode('utf-8')}")
-                logging.info(f"二维码类型:{obj.type}")
+                self.logger.info(f"二维码内容:{obj.data.decode('utf-8')}")
+                self.logger.info(f"二维码类型:{obj.type}")
                 #print("二维码内容:", obj.data.decode("utf-8"))
                 #print("二维码类型:", obj.type)
 
             if not decoded_objects:
-                logging.info(f"未检测到二维码")
+                self.logger.info(f"未检测到二维码")
                 #print("未检测到二维码")
             
         # 使用matplotlib显示
@@ -109,7 +112,7 @@ class SSHConnection:
         plt.axis('off')  # 关闭坐标轴显示
         plt.show(block=False)  
         # 输入密码
-        logging.info(f"输入密码")
+        self.logger.info(f"输入密码")
         #print("请输入密码：")
         # 使用simpledialog来获取用户输入的验证码
         password = simpledialog.askstring("验证码", "请输入验证码：")
@@ -118,27 +121,27 @@ class SSHConnection:
         plt.close()  
         #password = "pass"
         #self.shell.send(username + password + '\n')
-        #logging.info(f "验证码：{self.username}{password}")
-        logging.info(f"验证码：{self.username}{password}")
+        #self.logger.info(f "验证码：{self.username}{password}")
+        self.logger.info(f"验证码：{self.username}{password}")
         self.shell.send(self.username + password + '\n')
 
         # 等待命令执行完成并读取输出
         time.sleep(1)
         if self.shell.recv_ready():
             output = self.shell.recv(1024).decode('utf-8')
-            logging.info(f"{output}")
+            self.logger.info(f"{output}")
             #print(output)
 
     def close(self):
         self.cmdObj.stop()
         if self.client:
-            logging.info(f"开始关闭远程连接......")
+            self.logger.info(f"开始关闭远程连接......")
             #print("\n开始关闭远程连接......\n")
             self.client.close()
-            logging.info(f"远程连接关闭成功")
+            self.logger.info(f"远程连接关闭成功")
             #print("\n远程连接关闭成功\n")
         else:
-            logging.info(f"远程连接已关闭，无需手动关闭")
+            self.logger.info(f"远程连接已关闭，无需手动关闭")
             #print("\n远程连接已关闭，无需手动关闭\n")
 
     def start(self):
