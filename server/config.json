@@ -2,5 +2,9 @@
     "device_ip": "172.27.1.234",
     "device_username": "admin",
     "device_password": "7ujMko0admin123",
-    "device_interval": "3"
+    "device_interval": "3",
+    "server_ip": "172.27.1.233",
+    "server_username": "111",
+    "server_password": "2222",
+    "server_cross": "aaaa"
 }

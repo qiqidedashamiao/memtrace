@@ -51,7 +51,7 @@ class MemInfoCmd:
     #     self.timer.cancel()
     #     #等待定时器结束
     #     self.timer.join()
-
-        self.scheduler.shutdown()  # 关闭调度器
+        if self.scheduler.running:
+            self.scheduler.shutdown()  # 关闭调度器
 
         

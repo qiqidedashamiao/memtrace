@@ -51,9 +51,9 @@ def parse_ascii_to_image(ascii_data):
                 pixels[x, index+1] = color2
     
     # 放大图像
-    scale = 30
-    new_width, new_height = width * scale, height * scale
-    img = img.resize((new_width, new_height), Image.NEAREST)  # NEAREST用于放大时保持像素的锐利边缘
+    # scale = 30
+    # new_width, new_height = width * scale, height * scale
+    # img = img.resize((new_width, new_height), Image.NEAREST)  # NEAREST用于放大时保持像素的锐利边缘
 
     return img
 

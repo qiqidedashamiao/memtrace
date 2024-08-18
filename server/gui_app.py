@@ -115,14 +115,14 @@ class ConfigApp:
         devicetextlist = ["IP:", "用户名:", "密码:", "采样时间:"]
         devicename = ["device_ip", "device_username", "device_password", "device_interval"]
         device_entry = {}  # Define the device_entry dictionary
-        for i in range(4):
+        for i in range(len(devicetextlist)):
             ttk.Label(device_frame, text=devicetextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
             device_entry[i] = ttk.Entry(device_frame, font=font_large)
             device_entry[i].grid(row=i, column=1, padx=10, pady=10, sticky="sw")  # Use device_entry[i] instead of device_ip_entry
             device_entry[i].insert(0, self.config_data.get(devicename[i], ""))  # Set default value
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
-        ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window,devicename), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
         #ttk.Button(device_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
         ttk.Button(device_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
@@ -140,24 +140,35 @@ class ConfigApp:
 
         # 在“编译服务器配置”界面中添加控件
         servertextlist = ["IP:", "用户名:", "密码:", "交叉编译链:"]
-        for i in range(4):
+        servername = ["server_ip", "server_username", "server_password", "server_cross"]
+        server_entry = {}  # Define the server_entry dictionary
+        for i in range(len(servertextlist)):
             ttk.Label(server_frame, text=servertextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
-            device_ip_entry = ttk.Entry(server_frame, font=font_large)
-            device_ip_entry.grid(row=i, column=1, padx=10, pady=10, sticky="sw")
+            server_entry[i] = ttk.Entry(server_frame, font=font_large)
+            server_entry[i].grid(row=i, column=1, padx=10, pady=10, sticky="sw")
+            server_entry[i].insert(0, self.config_data.get(servername[i], ""))
+
+        
+        # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
+        ttk.Button(server_frame, text="保存", command=lambda: self.save_config_device(server_entry,config_window,servername), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        #ttk.Button(device_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
+         # 添加退出按钮
+        ttk.Button(server_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
 
         # 将Notebook添加到配置窗口
         notebook.pack(expand=True, fill="both")
 
         #messagebox.showinfo("配置选项", "配置选项被点击")
     
-    def save_config_device(self, device_entry, config_window):
+    def save_config_device(self, device_entry, config_window,name):
         """保存输入内容到配置文件"""
-        config_data = {
-            "device_ip": device_entry[0].get(),
-            "device_username": device_entry[1].get(),
-            "device_password": device_entry[2].get(),
-            "device_interval": device_entry[3].get()
-        }
+        # config_data = {
+        #     "device_ip": device_entry[0].get(),
+        #     "device_username": device_entry[1].get(),
+        #     "device_password": device_entry[2].get(),
+        #     "device_interval": device_entry[3].get()
+        # }
+        config_data = {name[i]: device_entry[i].get() for i in range(len(device_entry))}
 
         self.config_data.update(config_data)
 

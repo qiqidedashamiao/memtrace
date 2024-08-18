@@ -11,6 +11,10 @@ import io
 import time
 from PIL import Image
 import tkinter as tk
+import cv2
+from pyzbar import pyzbar
+
+import qrcode
 
 from cmd_meminfo import MemInfoCmd
 from localutil import parse_ascii_to_image, trim_binary_data
@@ -26,7 +30,7 @@ class SSHConnection:
         self.shell = None
         self.cmdObj = MemInfoCmd()
         self.connect()
-        self.start()
+        #self.start()
 
     def connect(self):
         try:
@@ -67,7 +71,7 @@ class SSHConnection:
         # 读取二维码
         time.sleep(1)
         if self.shell.recv_ready():
-            output = self.shell.recv(8192)
+            output = self.shell.recv(8192*2)
             output = trim_binary_data(output)
             output = output.decode('utf-8')
             print(output)
@@ -76,6 +80,21 @@ class SSHConnection:
             # 将 ASCII 图案转为图片，可行
             img = parse_ascii_to_image(output)
             img.show()
+            # 保存图片为png格式
+            img.save('qrcode.png')
+            image = Image.open('qrcode.png')
+            # 转换为灰度图像
+            # img = img.convert('L')
+            #解析图片img中的二维码内容
+            # 使用 pyzbar 库解码二维码
+            decoded_objects = pyzbar.decode(image)
+            for obj in decoded_objects:
+                print("二维码内容:", obj.data.decode("utf-8"))
+                print("二维码类型:", obj.type)
+
+            if not decoded_objects:
+                print("未检测到二维码")
+            
         # 输入密码
         print("请输入密码：")
         password = "pass"
@@ -106,6 +125,7 @@ if __name__ == '__main__':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     # 配置日志记录
     logging.basicConfig(level=logging.INFO)
+
     # ssh = SSHConnection("192.168.0.14", "root", "Aa1234561")
     # user_input = input("请输入结束字符exit：")
     # # 关闭MemInfoCmd中的定时器
