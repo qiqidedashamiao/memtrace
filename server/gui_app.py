@@ -12,7 +12,11 @@ class ConfigApp:
     m_config_data = {}
     m_ssh_memory = None
     def __init__(self, root):
-        self.load_config()
+         # 创建日志显示区域
+        self.log_display = scrolledtext.ScrolledText(root, width=80, height=20, state='disabled', wrap='word')
+        self.log_display.grid(row=0, column=0, padx=10, pady=10)
+        # # 设置日志记录
+        self.setup_logging()
         self.root = root
         self.root.title("tool")
 
@@ -68,6 +72,8 @@ class ConfigApp:
 
         # 将菜单栏设置为主窗口的菜单
         root.config(menu=menu_bar)
+        
+        self.load_config()
 
     def setup_logging(self):
         """设置日志记录器，将日志输出到Text控件中"""
@@ -112,11 +118,12 @@ class ConfigApp:
             messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
         else:
             messagebox.showinfo("内存变化", "内存变化启动")
-            self.m_ssh_memory = SSHConnection(self.m_config_data["device"])
+            self.m_ssh_memory = SSHConnection(self.m_config_data)
 
     def on_memory_stop(self):
         messagebox.showinfo("内存变化", "内存变化停止")
         if self.m_ssh_memory is not None:
+            self.logger.info("关闭内存变化")
             self.m_ssh_memory.close()
             self.m_ssh_memory = None
 
@@ -139,8 +146,10 @@ class ConfigApp:
                 "username": "",
                 "password": "",
                 "cross": ""
-                }
+                },
+                "max_receive_length": 32768
             }
+        self.logger.info(f"config_data: {self.m_config_data}")
 
     def on_configure_option(self):
         

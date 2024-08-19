@@ -7,6 +7,7 @@ import threading
 import time
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from matplotlib import animation, pyplot as plt
 
 class MemInfoCmd:
     def __init__(self,device_config):
@@ -22,15 +23,19 @@ class MemInfoCmd:
         with open(f"data/meminfo/meminfo-{self.time_str}.txt", "a") as f:
             pass
         self.shell = None
-        self.interval = 1   #默认1s
+        self.interval = 5   #默认5s
         if "device_interval" in device_config:
-            self.interval = device_config["device_interval"]
+            self.interval = device_config["device"]["device_interval"]
         self.meminfo = []
+        self.max_receive_length = 32768
+        if "max_receive_length" in device_config:
+            self.max_receive_length = device_config["max_receive_length"]
 
         # self.timer = None
         # self.is_running = False
 
         self.scheduler = BackgroundScheduler()
+
 
     def start(self, shell):
         self.logger.info(f"start")
@@ -43,15 +48,17 @@ class MemInfoCmd:
         self.scheduler.start()
         self.scheduler.add_job(self.get_meminfo, IntervalTrigger(seconds=self.interval))
 
+
     def get_meminfo(self):
         self.logger.info(f"send cmd")
         self.shell.send("cat /proc/meminfo\n")
         time.sleep(1)
+        self.logger.info(f"recv cmd")
         if self.shell.recv_ready():
-            output = self.shell.recv(8192)
+            output = self.shell.recv(self.max_receive_length)
             #output = trim_binary_data(output)
             output = output.decode('utf-8')
-            self.logger.debug(f"{output}")
+            #self.logger.info(f"{output}")
             #print(output)
             # 获取当前时间并格式化为字符串
             current_time = datetime.now()
@@ -64,12 +71,20 @@ class MemInfoCmd:
             #将接收到的数据写入到目录/data/meminfo/meminfo-time.txt文件中
             with open(f"data/meminfo/meminfo-{self.time_str}.txt", "a") as f:
                 f.write(output_with_timestamp)
+            
+
+            for line in output.splitlines():
+                #self.logger.info(f"{line}")
+                if "MemAvailable" in line:
+                    return int(line.split()[1])  # 返回MemAvailable的值
 
             #self.meminfo.append(output)
 
         # if self.is_running:
         #     self.timer = threading.Timer(self.interval, self.get_meminfo)
         #     self.timer.start()
+
+        return None
 
     #关闭定时器
     def stop(self):
@@ -79,5 +94,8 @@ class MemInfoCmd:
     #     self.timer.join()
         if self.scheduler.running:
             self.scheduler.shutdown()  # 关闭调度器
+        self.logger.info(f"stop")
+
+
 
         

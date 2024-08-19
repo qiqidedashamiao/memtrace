@@ -64,3 +64,30 @@ Flags：查找 PIE 标志。
 例如，运行可执行文件并查看其内存映射：
 ./sonia &
 pmap $!
+
+打包python工程命令
+python setup.py build
+详细说明：
+使用 cx_Freeze，也可以打包多个 Python 文件。假设项目结构相同，以下是步骤：
+1. 创建 setup.py
+你需要在项目根目录中创建一个 setup.py 脚本，用于定义打包配置。
+'''
+from cx_Freeze import setup, Executable
+
+# 指定主脚本和依赖
+executables = [Executable("main.py")]
+
+# 设置打包选项
+setup(
+    name="MyApp",
+    version="0.1",
+    description="My Python Application",
+    executables=executables
+)
+'''
+
+2. 运行打包命令
+在项目根目录下运行以下命令：
+
+python setup.py build
+生成的可执行文件会出现在 build 目录中，包含所有依赖的模块和文件。

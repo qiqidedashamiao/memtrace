@@ -1,5 +1,6 @@
 
 import importlib.util
+import logging
 import subprocess
 import sys
 from PIL import Image
@@ -25,7 +26,7 @@ def parse_ascii_to_image(ascii_data):
     # 确定图像大小
     width, height = len(lines[0]), len(lines)
 
-    print(width, height)
+    logging.info(width, height)
 
     # 创建黑白图片
     img = Image.new('1', (width, height*2), color=1)  # '1'模式是1位黑白图像

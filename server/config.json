@@ -3,12 +3,13 @@
         "host": "192.168.0.14",
         "username": "root",
         "password": "Aa123456",
-        "interval": "2"
+        "interval": "5"
     },
     "server": {
         "ip": "222",
         "username": "555",
         "password": "444",
         "cross": "111"
-    }
+    },
+    "max_receive_length": 32768
 }
