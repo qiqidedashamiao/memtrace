@@ -77,7 +77,7 @@ class MemInfoCmd:
             for line in output.splitlines():
                 #self.logger.info(f"{line}")
                 if "MemAvailable" in line:
-                    self.configApp.start_chart(int(line.split()[1]))
+                    self.configApp.start_chart(int(line.split()[1])/1024)
                     return int(line.split()[1])  # 返回MemAvailable的值
 
             #self.meminfo.append(output)

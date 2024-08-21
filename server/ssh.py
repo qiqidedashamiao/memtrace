@@ -30,6 +30,7 @@ class SSHConnection:
         self.username = device_config["device"]["username"]
         self.password = device_config["device"]["password"]
         self.max_receive_length = 32768
+        self.user = device_config["user"]["username"]
         if "max_receive_length" in device_config:
             self.max_receive_length = device_config["max_receive_length"]
         self.logger.info(f"host:{self.host}, username:{self.username}, password:{self.password}")
@@ -86,14 +87,14 @@ class SSHConnection:
             # 输入用户名
             #username = "234646"
             #self.shell.send(username + '\n')
-            self.shell.send(self.username + '\n')
+            self.shell.send(self.user + '\n')
             img = None
             # 读取二维码
             time.sleep(1)
             if self.shell.recv_ready():
                 output = self.shell.recv(self.max_receive_length)
-                self.logger.info(f"{output}")
                 output = trim_binary_data(output)
+                #self.logger.info(f"{output}")
                 output = output.decode('utf-8')
                 self.logger.info(f"{output}")
                 #输出output的大小

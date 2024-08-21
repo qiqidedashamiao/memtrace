@@ -103,10 +103,14 @@ class ConfigApp:
             # 初始化绘图数据
             self.data = []
             self.max_points = 20
+            self.update_interval = 5000  # 5秒更新一次
+            self.y_min = 7000
+            self.y_max = 7300
+            self.y_step = 50
 
             # 设置图表为运行状态
             self.is_running = True
-            self.update_chart(mem_available)
+        self.update_chart(mem_available)
 
     def close_chart(self):
         """关闭图表窗口"""
@@ -117,12 +121,12 @@ class ConfigApp:
 
     def update_chart(self, mem_available):
         """更新图表数据"""
+        self.logger.info(f"mem_available: {mem_available}, is_running: {self.is_running}")
         if not self.is_running:
             return  # 如果不再运行，停止更新
 
         # 模拟接收内存信息（实际应从客户端接收数据）
         #mem_available = random.randint(100000, 200000)  # 模拟的内存值
-
         # 记录数据
         if len(self.data) >= self.max_points:
             self.data.pop(0)
@@ -137,12 +141,13 @@ class ConfigApp:
 
     def draw_chart(self):
         """绘制折线图"""
+        
         self.canvas.delete("all")  # 清除之前的图形
 
         # 计算数据点的坐标
         width = self.canvas.winfo_width()
         height = self.canvas.winfo_height()
-        padding = 20
+        padding = 50
 
         # 绘制坐标轴
         self.canvas.create_line(padding, padding, padding, height - padding, fill='black')
@@ -151,14 +156,29 @@ class ConfigApp:
         if len(self.data) < 2:
             return
 
+        # 绘制纵坐标刻度和说明
+        for i in range(self.y_min, self.y_max + 1, self.y_step):
+            y = height - padding - ((i - self.y_min) / (self.y_max - self.y_min)) * (height - 2 * padding)
+            self.canvas.create_line(padding - 5, y, padding + 5, y, fill='black')
+            self.canvas.create_text(padding - 30, y, text=f"{i} MB", fill='black')
+
+        # 绘制横坐标说明（时间）
+        for i in range(0, self.max_points, 10):  # 每10个点一个刻度
+            x = padding + i * (width - 2 * padding) / (self.max_points - 1)
+            self.canvas.create_line(x, height - padding - 5, x, height - padding + 5, fill='black')
+            self.canvas.create_text(x, height - padding + 20, text=f"{i*5//60}:{i*5%60:02d}", fill='black')
+        
+
         # 计算折线的坐标点
+        # x_scale = (width - 2 * padding) / (self.max_points - 1)
+        # y_scale = (height - 2 * padding) / (max(self.data) - min(self.data))
         x_scale = (width - 2 * padding) / (self.max_points - 1)
-        y_scale = (height - 2 * padding) / (max(self.data) - min(self.data))
+        y_scale = (height - 2 * padding) / (self.y_max - self.y_min)
 
         points = []
         for i, value in enumerate(self.data):
             x = padding + i * x_scale
-            y = height - padding - (value - min(self.data)) * y_scale
+            y = height - padding - (value - self.y_min) * y_scale
             points.extend((x, y))
 
         # 绘制折线
