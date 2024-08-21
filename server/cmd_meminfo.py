@@ -10,7 +10,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 from matplotlib import animation, pyplot as plt
 
 class MemInfoCmd:
-    def __init__(self,device_config):
+    def __init__(self,device_config,configApp):
+        self.configApp = configApp
         # 将当前时间格式化为字符串
         current_time = datetime.now()
         self.time_str = current_time.strftime("%Y-%m-%d %H-%M-%S")
@@ -76,6 +77,7 @@ class MemInfoCmd:
             for line in output.splitlines():
                 #self.logger.info(f"{line}")
                 if "MemAvailable" in line:
+                    self.configApp.start_chart(int(line.split()[1]))
                     return int(line.split()[1])  # 返回MemAvailable的值
 
             #self.meminfo.append(output)
@@ -93,8 +95,9 @@ class MemInfoCmd:
     #     #等待定时器结束
     #     self.timer.join()
         if self.scheduler.running:
-            self.scheduler.shutdown()  # 关闭调度器
+            self.scheduler.shutdown(wait=False)  # 关闭调度器
         self.logger.info(f"stop")
+        self.configApp.close_chart()
 
 
 

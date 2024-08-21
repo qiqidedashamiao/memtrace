@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 from tkinter import scrolledtext
+from tkinter import font
 
 from ssh import SSHConnection
 
@@ -12,11 +13,14 @@ class ConfigApp:
     m_config_data = {}
     m_ssh_memory = None
     def __init__(self, root):
-         # 创建日志显示区域
-        self.log_display = scrolledtext.ScrolledText(root, width=80, height=20, state='disabled', wrap='word')
-        self.log_display.grid(row=0, column=0, padx=10, pady=10)
-        # # 设置日志记录
-        self.setup_logging()
+
+
+
+
+         # 初始化绘图变量
+        self.chart_window = None  # 折线图窗口
+        self.is_running = False   # 用于控制图表更新的状态
+
         self.root = root
         self.root.title("tool")
 
@@ -24,6 +28,21 @@ class ConfigApp:
 
         # 在窗口关闭事件时，调用on_closing函数
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # 设置字体为等宽字体，例如“Courier New”、"Noto Sans"、"DejaVu Sans Mono"、"Arial Unicode MS"
+        # Courier New可以显示二维码
+        font_obj = font.Font(family="Courier New", size=12)
+         # 创建日志显示区域
+        self.log_display = scrolledtext.ScrolledText(root, width=70, height=30, state='disabled', wrap='none')
+        self.log_display.grid(row=0, column=0, padx=20, pady=10)
+        self.log_display.configure(font=font_obj)
+        #在ScrolledText下面增加水平滚动条
+        h_scroll = tk.Scrollbar(root, orient=tk.HORIZONTAL, command=self.log_display.xview)
+        h_scroll.grid(row=1, column=0, sticky='ew')
+        # 绑定水平滚动条
+        self.log_display.configure(xscrollcommand=h_scroll.set)
+        # # 设置日志记录
+        self.setup_logging()
 
         menu_bar = tk.Menu(root)
         menu_bar.grid_rowconfigure(0, minsize=20)  # 使菜单栏填充整个窗口
@@ -64,16 +83,86 @@ class ConfigApp:
         menu_bar.add_cascade(label="工具", menu=tool_menu, font=("Arial", 14))
         #menu_bar.entryconfig("选项", padding=20)
 
-         # 创建日志显示区域
-        self.log_display = scrolledtext.ScrolledText(root, width=80, height=20, state='disabled', wrap='word')
-        self.log_display.grid(row=0, column=0, padx=10, pady=10)
-        # # 设置日志记录
-        self.setup_logging()
-
         # 将菜单栏设置为主窗口的菜单
         root.config(menu=menu_bar)
         
         self.load_config()
+
+    def start_chart(self, mem_available):
+        """开始动态更新图表并打开新窗口"""
+        if self.chart_window is None or not self.is_running:
+            # 创建一个新的窗口
+            self.chart_window = tk.Toplevel(self.root)
+            self.chart_window.title("Dynamic Memory Chart")
+            self.chart_window.protocol("WM_DELETE_WINDOW", self.close_chart)
+
+            # 创建 Canvas 组件
+            self.canvas = tk.Canvas(self.chart_window, width=800, height=400, bg='white')
+            self.canvas.pack()
+
+            # 初始化绘图数据
+            self.data = []
+            self.max_points = 20
+
+            # 设置图表为运行状态
+            self.is_running = True
+            self.update_chart(mem_available)
+
+    def close_chart(self):
+        """关闭图表窗口"""
+        self.is_running = False  # 停止图表更新
+        if self.chart_window:
+            self.chart_window.destroy()
+            self.chart_window = None
+
+    def update_chart(self, mem_available):
+        """更新图表数据"""
+        if not self.is_running:
+            return  # 如果不再运行，停止更新
+
+        # 模拟接收内存信息（实际应从客户端接收数据）
+        #mem_available = random.randint(100000, 200000)  # 模拟的内存值
+
+        # 记录数据
+        if len(self.data) >= self.max_points:
+            self.data.pop(0)
+        self.data.append(mem_available)
+
+        # 绘制图表
+        self.draw_chart()
+
+        # # 定时更新
+        # if self.is_running:
+        #     self.chart_window.after(5000, self.update_chart)  # 每秒更新一次
+
+    def draw_chart(self):
+        """绘制折线图"""
+        self.canvas.delete("all")  # 清除之前的图形
+
+        # 计算数据点的坐标
+        width = self.canvas.winfo_width()
+        height = self.canvas.winfo_height()
+        padding = 20
+
+        # 绘制坐标轴
+        self.canvas.create_line(padding, padding, padding, height - padding, fill='black')
+        self.canvas.create_line(padding, height - padding, width - padding, height - padding, fill='black')
+
+        if len(self.data) < 2:
+            return
+
+        # 计算折线的坐标点
+        x_scale = (width - 2 * padding) / (self.max_points - 1)
+        y_scale = (height - 2 * padding) / (max(self.data) - min(self.data))
+
+        points = []
+        for i, value in enumerate(self.data):
+            x = padding + i * x_scale
+            y = height - padding - (value - min(self.data)) * y_scale
+            points.extend((x, y))
+
+        # 绘制折线
+        self.canvas.create_line(points, fill='blue')
 
     def setup_logging(self):
         """设置日志记录器，将日志输出到Text控件中"""
@@ -117,8 +206,11 @@ class ConfigApp:
         if self.m_ssh_memory is not None:
             messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
         else:
-            messagebox.showinfo("内存变化", "内存变化启动")
-            self.m_ssh_memory = SSHConnection(self.m_config_data)
+            #messagebox.showinfo("内存变化", "内存变化启动")
+            self.m_ssh_memory = SSHConnection(self.m_config_data,self)
+            if self.m_ssh_memory.connect() is False:
+                messagebox.showinfo("内存变化", "内存监听启动失败")
+                self.m_ssh_memory = None
 
     def on_memory_stop(self):
         messagebox.showinfo("内存变化", "内存变化停止")
@@ -129,26 +221,34 @@ class ConfigApp:
 
     def load_config(self):
         """从配置文件加载内容"""
-        try:
-            with open("config.json", "r") as config_file:
-                self.m_config_data = json.load(config_file)
-        except FileNotFoundError:
-            # 如果文件不存在，使用默认值
-            self.m_config_data = {
-                "device": {
+        self.m_config_data = {
+            "device": {
                 "host": "",
-                "username": "",
-                "password": "",
+                "username": "admin",
+                "password": "7ujMko0admin123",
                 "interval": 1
-                },
-                "server": {
+            },
+            "server": {
                 "ip": "",
                 "username": "",
                 "password": "",
                 "cross": ""
-                },
-                "max_receive_length": 32768
-            }
+            },
+            "user": {
+                "username": "234646",
+                "password": ""
+            },
+            "max_receive_length": 32768
+        }
+        try:
+            with open("config.json", "r") as config_file:
+                self.m_config_data.update(json.load(config_file))
+        except FileNotFoundError:
+            # 如果文件不存在，使用默认值
+            pass
+
+        with open("config.json", "w") as config_file:
+            json.dump(self.m_config_data, config_file, indent=4)
         self.logger.info(f"config_data: {self.m_config_data}")
 
     def on_configure_option(self):
@@ -166,17 +266,46 @@ class ConfigApp:
 
         # 创建Notebook（选项卡容器）
         notebook = ttk.Notebook(config_window, style="TNotebook")
-
-        # 创建“设备配置”子界面
-        device_frame = ttk.Frame(notebook)
-        notebook.add(device_frame, text="设备配置")
-
+        
         # 使用 lambda 表达式配置列宽度和行高
         configure_grid = lambda frame: (
             frame.grid_columnconfigure(0, minsize=500 * 2 / 5),  # 设置第一列的最小宽度
             frame.grid_columnconfigure(1, weight=1),             # 第二列可以扩展
             frame.grid_rowconfigure(0, minsize=500 * 1 / 3)      # 设置第一行高度
         )
+
+        # 创建“用户配置”子界面
+        user_frame = ttk.Frame(notebook)
+        notebook.add(user_frame, text="用户配置")
+
+        # 配置列宽度，以确保控件的左边距
+        # user_frame.grid_columnconfigure(0, minsize=500 * 2 / 5)  # 将第一列的最小宽度设置为100像素
+        # user_frame.grid_columnconfigure(1, weight=1)     # 第二列可以扩展
+        
+        # user_frame.grid_rowconfigure(0, minsize=500*1/3)   # 设置第一行高度为100
+        configure_grid(user_frame)
+        
+        #在“用户配置”界面中添加控件
+        usertextlist = ["用户名:", "密码:"]
+        username = ["username", "password"]
+        user_entry = {}  # Define the device_entry dictionary
+        user_key = "user"
+        for i in range(len(usertextlist)):
+            ttk.Label(user_frame, text=usertextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
+            user_entry[i] = ttk.Entry(user_frame, font=font_large)
+            user_entry[i].grid(row=i, column=1, padx=10, pady=10, sticky="sw")  # Use device_entry[i] instead of device_ip_entry
+            if username[i] in self.m_config_data[user_key]:
+                user_entry[i].insert(0, self.m_config_data[user_key].get(username[i]))  # Set default value
+        
+        # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
+        ttk.Button(user_frame, text="保存", command=lambda: self.save_config_device(user_entry,config_window,username,user_key), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        #ttk.Button(user_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
+         # 添加退出按钮
+        ttk.Button(user_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
+
+        # 创建“设备配置”子界面
+        device_frame = ttk.Frame(notebook)
+        notebook.add(device_frame, text="设备配置")
 
         # 配置列宽度，以确保控件的左边距
         # device_frame.grid_columnconfigure(0, minsize=500 * 2 / 5)  # 将第一列的最小宽度设置为100像素
@@ -271,23 +400,3 @@ class ConfigApp:
     def on_tool_option(self):
         messagebox.showinfo("工具选项", "工具选项被点击")
 
-    def save_config(self):
-        # 处理用户配置
-        config = {
-            "meminfo_enabled": self.meminfo_var.get(),
-            "cpuinfo_enabled": self.cpuinfo_var.get(),
-            "diskinfo_enabled": self.diskinfo_var.get(),
-        }
-
-        # 展示配置结果
-        config_message = (
-            f"内存信息启用: {config['meminfo_enabled']}\n"
-            f"CPU信息启用: {config['cpuinfo_enabled']}\n"
-            f"磁盘使用情况启用: {config['diskinfo_enabled']}"
-        )
-        messagebox.showinfo("配置保存", config_message)
-
-        # 在这里可以添加保存配置到文件或应用配置到系统的逻辑
-        # 示例：
-        # with open("config.txt", "w") as f:
-        #     f.write(str(config))

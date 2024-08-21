@@ -91,3 +91,8 @@ setup(
 
 python setup.py build
 生成的可执行文件会出现在 build 目录中，包含所有依赖的模块和文件。
+
+安装依赖插件
+import pyautogui
+pyzbar
+
