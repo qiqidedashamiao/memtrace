@@ -107,6 +107,7 @@ class ConfigApp:
             self.y_min = 7000
             self.y_max = 7300
             self.y_step = 50
+            self.point_tags = []  # 存储数据点的标签
 
             # 设置图表为运行状态
             self.is_running = True
@@ -143,6 +144,7 @@ class ConfigApp:
         """绘制折线图"""
         
         self.canvas.delete("all")  # 清除之前的图形
+        self.point_tags = []  # 每次更新清空点标签列表
 
         # 计算数据点的坐标
         width = self.canvas.winfo_width()
@@ -160,13 +162,14 @@ class ConfigApp:
         for i in range(self.y_min, self.y_max + 1, self.y_step):
             y = height - padding - ((i - self.y_min) / (self.y_max - self.y_min)) * (height - 2 * padding)
             self.canvas.create_line(padding - 5, y, padding + 5, y, fill='black')
-            self.canvas.create_text(padding - 30, y, text=f"{i} MB", fill='black')
+            self.canvas.create_text(padding - 30, y, text=f"{i+self.y_min} MB", fill='black')
 
         # 绘制横坐标说明（时间）
-        for i in range(0, self.max_points, 10):  # 每10个点一个刻度
+        for i in range(0, self.max_points, 1):  # 每10个点一个刻度
             x = padding + i * (width - 2 * padding) / (self.max_points - 1)
             self.canvas.create_line(x, height - padding - 5, x, height - padding + 5, fill='black')
-            self.canvas.create_text(x, height - padding + 20, text=f"{i*5//60}:{i*5%60:02d}", fill='black')
+            #self.canvas.create_text(x, height - padding + 20, text=f"{i*5//60}:{i*5%60:02d}", fill='black')
+            self.canvas.create_text(x, height - padding + 20, text=f"{i*5} s", fill='black')
         
 
         # 计算折线的坐标点
@@ -180,9 +183,19 @@ class ConfigApp:
             x = padding + i * x_scale
             y = height - padding - (value - self.y_min) * y_scale
             points.extend((x, y))
+            # # 在每个点上显示具体的内存值
+            # self.canvas.create_text(x, y - 10, text=f"{value:.2f} MB", fill='red', font=("Arial", 8))
+            # 绘制不可见的点（用于绑定事件）
+            point_id = self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, outline="", fill="")
+            self.point_tags.append(point_id)
+            # 绑定鼠标点击事件
+            self.canvas.tag_bind(point_id, "<Button-1>", lambda event, v=value, x=x, y=y: self.show_value(event, v, x, y))
 
         # 绘制折线
         self.canvas.create_line(points, fill='blue')
+    def show_value(self, event, value, x, y):
+        # 显示点击点的值
+        self.canvas.create_text(x, y - 10, text=f"{value:.2f} MB", fill='red', font=("Arial", 8))
 
     def setup_logging(self):
         """设置日志记录器，将日志输出到Text控件中"""

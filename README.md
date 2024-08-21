@@ -96,3 +96,7 @@ python setup.py build
 import pyautogui
 pyzbar
 
+内存变化：计划
+1、内存信息写入excel表格，时间+内存列
+2、展示信息横坐标按时间显示
+3、绘图显示可按照最小时间间隔，5min，30分钟，1小时显示
