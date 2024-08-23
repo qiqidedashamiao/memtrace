@@ -1,6 +1,7 @@
 
 import json
 import logging
+import threading
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
@@ -21,10 +22,13 @@ class ConfigApp:
         self.chart_window = None  # 折线图窗口
         self.is_running = False   # 用于控制图表更新的状态
 
+        self.ssh_thread = None
+        self.ssh_state = False
+
         self.root = root
         self.root.title("tool")
 
-        self.root.geometry("800x600")
+        self.root.geometry("1000x800")
 
         # 在窗口关闭事件时，调用on_closing函数
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -33,7 +37,7 @@ class ConfigApp:
         # Courier New可以显示二维码
         font_obj = font.Font(family="Courier New", size=12)
          # 创建日志显示区域
-        self.log_display = scrolledtext.ScrolledText(root, width=70, height=30, state='disabled', wrap='none')
+        self.log_display = scrolledtext.ScrolledText(root, width=80, height=40, state='disabled', wrap='none')
         self.log_display.grid(row=0, column=0, padx=20, pady=10)
         self.log_display.configure(font=font_obj)
         #在ScrolledText下面增加水平滚动条
@@ -219,6 +223,7 @@ class ConfigApp:
         self.log_display.yview(tk.END)  # 自动滚动到最后一行
 
     def flush(self):
+        self.log_display.update_idletasks()  # 强制刷新窗口显示
         pass  # 这个方法是处理器接口的一部分，通常可以不需要实现
 
     def simulate_logging(self):
@@ -236,17 +241,26 @@ class ConfigApp:
         self.root.destroy()
 
     def on_memory_start(self):
-        if self.m_ssh_memory is not None:
+        
+        if self.ssh_thread is not None:
+            # 创建并启动新线程
+            self.ssh_thread = threading.Thread(target=self.m_ssh_memory.connect(), args=(self))
+        
+        if self.ssh_thread.is_alive() or self.ssh_state is True:
             messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
         else:
             #messagebox.showinfo("内存变化", "内存变化启动")
-            self.m_ssh_memory = SSHConnection(self.m_config_data,self)
-            if self.m_ssh_memory.connect() is False:
-                messagebox.showinfo("内存变化", "内存监听启动失败")
-                self.m_ssh_memory = None
+            self.ssh_thread.start()
+            # self.m_ssh_memory = SSHConnection(self.m_config_data,self)
+            # self.ssh_thread = threading.Thread(target=self.m_ssh_memory.connect(), args=())
+            # self.ssh_thread.start()
+            # if self.m_ssh_memory.connect() is False:
+            #     messagebox.showinfo("内存变化", "内存监听启动失败")
+            #     self.m_ssh_memory = None
 
     def on_memory_stop(self):
         messagebox.showinfo("内存变化", "内存变化停止")
+        self.ssh_thread.join()
         if self.m_ssh_memory is not None:
             self.logger.info("关闭内存变化")
             self.m_ssh_memory.close()
