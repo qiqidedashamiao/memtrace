@@ -3,7 +3,7 @@ import json
 import logging
 import threading
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import BooleanVar, Checkbutton, Radiobutton, StringVar, messagebox
 from tkinter import ttk
 from tkinter import scrolledtext
 from tkinter import font
@@ -14,16 +14,9 @@ class ConfigApp:
     m_config_data = {}
     m_ssh_memory = None
     def __init__(self, root):
-
-
-
-
          # 初始化绘图变量
         self.chart_window = None  # 折线图窗口
         self.is_running = False   # 用于控制图表更新的状态
-
-        self.ssh_thread = None
-        self.ssh_state = False
 
         self.root = root
         self.root.title("tool")
@@ -37,9 +30,10 @@ class ConfigApp:
         # Courier New可以显示二维码
         font_obj = font.Font(family="Courier New", size=12)
          # 创建日志显示区域
-        self.log_display = scrolledtext.ScrolledText(root, width=80, height=40, state='disabled', wrap='none')
+        self.log_display = scrolledtext.ScrolledText(root, width=85, height=40, state='disabled', wrap='none')
         self.log_display.grid(row=0, column=0, padx=20, pady=10)
-        self.log_display.configure(font=font_obj)
+        self.log_display.configure(font=font_obj, bg='#f0f0f0', fg='black')  # 设置背景颜色
+
         #在ScrolledText下面增加水平滚动条
         h_scroll = tk.Scrollbar(root, orient=tk.HORIZONTAL, command=self.log_display.xview)
         h_scroll.grid(row=1, column=0, sticky='ew')
@@ -210,7 +204,7 @@ class ConfigApp:
         self.log_handler = logging.StreamHandler(self)
         self.log_handler.setLevel(logging.INFO)
 
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(message)s')
         self.log_handler.setFormatter(formatter)
 
         self.logger.addHandler(self.log_handler)
@@ -221,16 +215,11 @@ class ConfigApp:
         self.log_display.insert(tk.END, message + '\n')
         self.log_display.configure(state='disabled')
         self.log_display.yview(tk.END)  # 自动滚动到最后一行
+        self.flush()  # 强制刷新窗口显示
 
     def flush(self):
         self.log_display.update_idletasks()  # 强制刷新窗口显示
         pass  # 这个方法是处理器接口的一部分，通常可以不需要实现
-
-    def simulate_logging(self):
-        """模拟日志信息的产生"""
-        while True:
-            self.logger.info("模拟日志信息")
-            time.sleep(2)
 
 
     def on_closing(self):
@@ -241,26 +230,17 @@ class ConfigApp:
         self.root.destroy()
 
     def on_memory_start(self):
-        
-        if self.ssh_thread is not None:
-            # 创建并启动新线程
-            self.ssh_thread = threading.Thread(target=self.m_ssh_memory.connect(), args=(self))
-        
-        if self.ssh_thread.is_alive() or self.ssh_state is True:
+        if self.m_ssh_memory and  self.m_ssh_memory.ssh_state:
             messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
         else:
             #messagebox.showinfo("内存变化", "内存变化启动")
-            self.ssh_thread.start()
-            # self.m_ssh_memory = SSHConnection(self.m_config_data,self)
-            # self.ssh_thread = threading.Thread(target=self.m_ssh_memory.connect(), args=())
-            # self.ssh_thread.start()
-            # if self.m_ssh_memory.connect() is False:
-            #     messagebox.showinfo("内存变化", "内存监听启动失败")
-            #     self.m_ssh_memory = None
+            if self.m_ssh_memory:
+                self.m_ssh_memory.close()
+                self.m_ssh_memory = None
+            self.m_ssh_memory = SSHConnection(self.m_config_data,self)
 
     def on_memory_stop(self):
         messagebox.showinfo("内存变化", "内存变化停止")
-        self.ssh_thread.join()
         if self.m_ssh_memory is not None:
             self.logger.info("关闭内存变化")
             self.m_ssh_memory.close()
@@ -273,7 +253,9 @@ class ConfigApp:
                 "host": "",
                 "username": "admin",
                 "password": "7ujMko0admin123",
-                "interval": 1
+                "interval": 1,
+                "dshell": True,
+                "telnet": False
             },
             "server": {
                 "ip": "",
@@ -362,16 +344,43 @@ class ConfigApp:
         configure_grid(device_frame)
         
         #在“设备配置”界面中添加控件
+        #增加连接方式的单选按钮 ssh/telnet
+        #增加是否使用dshell的使能开关按钮
+
+        # 创建用于存储单选按钮选择的变量
+        selected_connection = StringVar(value="SSH")  # 默认选择SSH
+
+        
+        # 创建Telnet单选按钮
+        telnet_radio = Radiobutton(device_frame, text="Telnet连接", variable=selected_connection, value="Telnet")
+        telnet_radio.grid(row=0, column=0, sticky="se", padx=10, pady=5)
+
+        # 创建SSH单选按钮
+        ssh_radio = Radiobutton(device_frame, text="SSH连接", variable=selected_connection, value="SSH")
+        ssh_radio.grid(row=0, column=1, sticky=tk.W, padx=10, pady=5)
+
+
+        # 创建一个用于启用/禁用验证的复选框
+        verification_enabled = BooleanVar(value=True)  # 默认使能
+        verification_checkbox = Checkbutton(device_frame, text="DShell", variable=verification_enabled)
+        verification_checkbox.grid(row=0, column=2, sticky=tk.W, padx=10, pady=5)
+
+        # 创建一个按钮用于确认选择
+        #connect_button = tk.Button(device_frame, text="Connect", command=self.on_connect_mode)
+        #connect_button.grid(row=0, column=0, pady=10)
+
         devicetextlist = ["IP:", "用户名:", "密码:", "采样时间:"]
-        devicename = ["host", "username", "password", "interval"]
-        device_entry = {}  # Define the device_entry dictionary
+        devicename = ["connect_mode","dshell", "host", "username", "password", "interval"]
+        device_entry = [selected_connection,verification_enabled]  # Define the device_entry dictionary
         device_key = "device"
+        index = 2
         for i in range(len(devicetextlist)):
             ttk.Label(device_frame, text=devicetextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
-            device_entry[i] = ttk.Entry(device_frame, font=font_large)
-            device_entry[i].grid(row=i, column=1, padx=10, pady=10, sticky="sw")  # Use device_entry[i] instead of device_ip_entry
-            if devicename[i] in self.m_config_data[device_key]:
-                device_entry[i].insert(0, self.m_config_data[device_key].get(devicename[i]))  # Set default value
+            device_entry.append(ttk.Entry(device_frame, font=font_large))
+            # device_entry[i+index] = ttk.Entry(device_frame, font=font_large)
+            device_entry[i+index].grid(row=i, column=1, padx=10, pady=10, sticky="sw")  # Use device_entry[i] instead of device_ip_entry
+            if devicename[i+index] in self.m_config_data[device_key]:
+                device_entry[i+index].insert(0, self.m_config_data[device_key].get(devicename[i+index]))  # Set default value
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
         ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window,devicename,device_key), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")

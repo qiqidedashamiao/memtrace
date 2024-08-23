@@ -4,6 +4,7 @@ import logging
 from threading import local
 import sys
 import subprocess
+import threading
 import time
 from tkinter import simpledialog
 import numpy as np
@@ -31,17 +32,22 @@ class SSHConnection:
         self.password = device_config["device"]["password"]
         self.max_receive_length = 32768
         self.user = device_config["user"]["username"]
+        self.pwd = device_config["user"]["password"]
         if "max_receive_length" in device_config:
             self.max_receive_length = device_config["max_receive_length"]
         self.logger.info(f"host:{self.host}, username:{self.username}, password:{self.password}")
         self.client = None
         self.shell = None
         self.cmdObj = MemInfoCmd(device_config,configApp)
+        self.state = False
+        self.ssh_thread = threading.Thread(target=self.connect, args=())
+        self.ssh_thread.start()
+            
         # if self.connect():
         #     self.start()
         #     pass
 
-    def connect(self, configApp):
+    def connect(self):
         self.logger.info(f"开始创建远程连接......")
         try:
             self.client = paramiko.SSHClient()
@@ -53,7 +59,7 @@ class SSHConnection:
             #self.login()
             if self.login():
                 self.start()
-                configApp.ssh_state = True
+                self.state = True
                 return True
             else:
                 self.close()
@@ -90,59 +96,53 @@ class SSHConnection:
             #self.shell.send(username + '\n')
             self.shell.send(self.user + '\n')
             img = None
+            password = None
+            output = None
             # 读取二维码
             time.sleep(1)
             if self.shell.recv_ready():
                 output = self.shell.recv(self.max_receive_length)
+
                 output = trim_binary_data(output)
                 #self.logger.info(f"{output}")
                 output = output.decode('utf-8')
-                self.logger.info(f"{output}")
+                #self.logger.info(f"output size:{len(output)}")
+                #self.logger.info(f"{output}")
                 # #输出output的大小
-                # #self.logger.info(f"output size:{len(output)}")
+                
                 # # 将 ASCII 图案转为图片，可行
-                # img = parse_ascii_to_image(output)
+                img = parse_ascii_to_image(output)
                 # #img.show()
                 # # 保存图片为png格式
-
-                # img.save('qrcode.png')
+                img.save('qrcode.png')
 
                 ##读取图片解析
                 # image = Image.open('qrcode.png')
                 # # 转换为灰度图像
-                # # img = img.convert('L')
+                img = img.convert("RGB")
+                img = img.convert('L')
                 # # 使用 pyzbar 库解码二维码
-                # decoded_objects = pyzbar.decode(image)
+                decoded_objects = pyzbar.decode(img)
 
-
-                # screenshot = ImageGrab.grab() 
+                # # 截屏当前屏幕
+                # screenshot = pyautogui.screenshot()
+                # # 将截图保存到内存中 (无需保存到磁盘)
+                # screenshot = screenshot.convert("RGB")
                 # screenshot = screenshot.convert('L')
-                # # # 解析截图中的二维码
-                # # decoded_objects = pyzbar.decode(screenshot)
-                #  # create a reader
-                # scanner = zbar.ImageScanner()
-                # # configure the reader
-                # scanner.parse_config('enable')
-                # width, height = image.size
-                # raw = image.tostring()
-                # # wrap image data
-                # zbarImage = zbar.Image(width, height, "Y800", raw)
-
-                # # scan the image for barcodes
-                # scanner.scan(zbarImage)
-
-                # data = ""
-                # self.logger.info(f"len(zbarImage.symbols): {len(zbarImage.symbols)}")
-                # for symbol in zbarImage.symbols:
-                #     # 获取二维码字符串信息
-                #     data = symbol.data#.replace("\n", "")
-                #     glo.LOGGER.debug("zbarImage.symbol data:\n%s" % data)
-                #     if self.__qr_str_info_is_valid(data):
-                #         # 如果已经获取到有效的信息, 就不继续往后找
-                #         # 因为有些二维码能读出两组symbol.data信息
-                #         break
-                # # clean up
-                # del(zbarImage)
+                # screenshot.save("screenshot.png")
+                # # 解析截图中的二维码
+                # decoded_objects = pyzbar.decode(screenshot)
+                
+                if not decoded_objects:
+                    self.logger.info(f"未检测到二维码")
+               # 遍历找到的所有二维码并打印结果
+                for obj in decoded_objects:
+                    self.logger.info(f"类型:{obj.type}")
+                    self.logger.info(f"数据:\r\n{obj.data.decode('utf-8')}")
+                    self.logger.info(f"位置:{obj.rect}")
+                    ret,password = self.parse_verity(obj)
+                    if ret:
+                        break
                 
             # # 使用matplotlib显示
             # self.logger.info(f"显示二维码")
@@ -150,30 +150,12 @@ class SSHConnection:
             # plt.axis('off')  # 关闭坐标轴显示
             # plt.show(block=True)  
 
-            time.sleep(5)
-            # 截屏当前屏幕
-            screenshot = pyautogui.screenshot()
-            screenshot.save("screenshot.png")
-            # 将截图保存到内存中 (无需保存到磁盘)
-            #screenshot = screenshot.convert("RGB")
-            screenshot = screenshot.convert("L")
-            # 解析截图中的二维码
-            decoded_objects = pyzbar.decode(screenshot)
-
-            # 遍历找到的所有二维码并打印结果
-            for obj in decoded_objects:
-                self.logger.info(f"类型:{obj.type}")
-                self.logger.info(f"数据:\r\n{obj.data.decode('utf-8')}")
-                self.logger.info(f"位置:{obj.rect}")
-
-            if not decoded_objects:
-                self.logger.info(f"未检测到二维码")
-
             # 输入密码
             self.logger.info(f"输入验证码：")
-            # 使用simpledialog来获取用户输入的验证码
-            password = simpledialog.askstring("验证码", "请输入验证码：")
-            plt.close()  
+            if password is None:
+                # 使用simpledialog来获取用户输入的验证码
+                password = simpledialog.askstring("验证码", "请输入验证码：")
+            #plt.close()  
             self.logger.info(f"验证码：{password}")
             self.shell.send(password + '\n')
 
@@ -191,6 +173,7 @@ class SSHConnection:
 
     def close(self):
         self.logger.info(f"开始关闭定时器......")
+        #self.ssh_thread.join()
         self.cmdObj.stop()
         if self.client:
             self.logger.info(f"开始关闭远程连接......")
@@ -204,6 +187,14 @@ class SSHConnection:
 
     def start(self):
         self.cmdObj.start(self.shell)
+
+    def parse_verity(self, obj):
+        if obj.data.decode('utf-8') == self.user:
+            self.logger.info(f"验证通过")
+            return True,obj.data.decode('utf-8')
+        else:
+            self.logger.info(f"验证失败")
+            return False,None
 
 
 
