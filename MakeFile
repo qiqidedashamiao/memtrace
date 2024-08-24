@@ -124,6 +124,7 @@ clean:
 	rm -rf $(TARGET)
 
 test:
+	rm -rf sonia
 	g++ -o sonia test.cpp -ldl $(CFLAGS)
 	#$(STRIP) sonia
 
@@ -135,5 +136,4 @@ APP_LDFLAGS += -g --std=c++11
 pre:
 	#mkdir -p $(OBJ_PATH)
 
-clean_parse:
 	

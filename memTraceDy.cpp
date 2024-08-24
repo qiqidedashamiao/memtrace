@@ -116,9 +116,17 @@ const int ONE_SPINFO_ITEM = (ONE_SPINFO_SIZE/8);
 const int ONE_ROW_SP_ITEM = (64);
 const int TOTAL_LEN = OUTPUT_BUFSIZE_LAST - sizeof(MemLogInfo);
 
-// static const char* g_path_list_dir = "/root/mount/share/memtrace/list";
-// static const char* g_path_map_dir = "/root/mount/share/memtrace/map";
-// static const char* g_path_param = "/root/mount/share/memtrace/param";
+// static const char* pathList = "/root/mount/share/memtrace/list";
+// static const char* pathMap = "/root/mount/share/memtrace/map";
+// static const char* pathParam = "/root/mount/share/memtrace/param";
+
+// static const char* pathList = "/home/234646/tools/git/workspace/memtrace/list";
+// static const char* pathMap = "/home/234646/tools/git/workspace/memtrace/map";
+// static const char* pathParam = "/home/234646/tools/git/workspace/memtrace/param";
+
+// static const char* pathList = "/mnt/appdata/mount/list";
+// static const char* pathMap = "/mnt/appdata/mount/map";
+// static const char* pathParam = "/mnt/appdata/param";
 
 static const char* g_path_list_dir = PATH_LIST_DIR;
 static const char* g_path_map_dir = PATH_MAP_DIR;
@@ -168,7 +176,7 @@ void printMap(int pid)
 		return;
 	}
 
-	char name[128];
+	char name[256];
 	struct tm t;
 	time_t tt;
 	time(&tt);
@@ -321,7 +329,7 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 		printMap(getpid());
 	}
 	
-	if (isStart == 1)
+	if (flag)
 	{
 		// 第一次启动开关打开，创建内存信息输出缓存
 		if(g_outputbuf == NULL)
@@ -362,7 +370,7 @@ void ReadParam(int &isStart , int & trace, int &traceTid, size_t &traceSize, siz
 				// std::cerr << "Failed to create thread." << std::endl;
 				return;
 			}
-			// g_writeThread = thread;
+			g_writeThread = thread;
 			if (pthread_detach(thread) != 0)
 			{
 				fprintf(stdout, "zl:Failed to detach writeFunction\n");

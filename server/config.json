@@ -1,11 +1,12 @@
 {
     "device": {
-        "connect_mode": "SSH",
-        "dshell": true,
         "host": "192.168.0.14",
         "username": "root",
         "password": "Aa123456",
-        "interval": "7"
+        "interval": "7",
+        "dshell": true,
+        "telnet": false,
+        "connect_mode": "SSH"
     },
     "server": {
         "ip": "192.168.0.14",

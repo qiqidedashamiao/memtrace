@@ -62,22 +62,50 @@ def parse_ascii_to_image(ascii_data):
 
     return img
 
-# #二进制数据中截取掉第一个\r\n前的数据以及最后一个\r\n后的数据
-# def trim_binary_data(binary_data):
-#     # 查找第一个 \r\n 的位置
-#     first_crlf_pos = binary_data.find(b'\r\n')
-    
-#     # 查找最后一个 \r\n 的位置
-#     last_crlf_pos = binary_data.rfind(b'\r\n')
+# 将utf-8字符串ascii_data按照实际显示进行转换显示，将'█'转换为' '，将'▀'转换为'▄'，将'▄'转换为'▀'，'\r\n'转换为'\r\n'，其他的字符转换为'█'
 
-#     # 如果找到了 \r\n, 则进行截取
-#     if first_crlf_pos != -1 and last_crlf_pos != -1 and first_crlf_pos != last_crlf_pos:
-#         # 截取第一个 \r\n 后和最后一个 \r\n 前的数据
-#         trimmed_data = binary_data[first_crlf_pos + 2:last_crlf_pos]
-#         return trimmed_data
-#     else:
-#         # 如果没有找到，或数据无效，返回原数据
-#         return binary_data
+
+
+
+def parse_ascii_to_resv(utf8_str):
+    # 创建转换规则的字典
+    conversion_dict = {
+        '█': ' ',    # 注意这里的替换字符是空格 (U+00A0, Non-breaking space)
+        '▀': '▄',
+        '▄': '▀',
+        '\r\n': '\r\n'  # 保持换行符不变
+    }
+    # 初始化结果字符串
+    out = ''
+    # 遍历输入字符串中的每个字符
+    i = 0
+    while i < len(utf8_str):
+        # 处理换行符
+        if utf8_str[i:i+2] == '\r\n':
+            out += '\r\n'
+            i += 2
+        else:
+            char = utf8_str[i]
+            # 如果字符在转换字典中，则替换；否则替换为 '█'
+            out += conversion_dict.get(char, '█')
+            i += 1
+    
+    return out
+
+    # outdata = list(utf8_str) 
+    # for index, char in enumerate(outdata):
+    #     if char == '█':
+    #         outdata[index] = ' '
+    #     elif char == '▀':
+    #         outdata[index] = '▄'
+    #     elif char == '▄':
+    #         outdata[index] = '▀'
+    #     elif char =='\r\n':
+    #         outdata[index] = '\r\n'
+    #     else:
+    #         outdata[index] = '█'
+    # out = ''.join(outdata)
+    # return out
     
 #二进制数据中截取掉第三个\r\n前的数据以及倒数第二个\r\n后的数据
 def trim_binary_data(binary_data):

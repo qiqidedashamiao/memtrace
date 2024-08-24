@@ -147,7 +147,7 @@ class ConfigApp:
         # 计算数据点的坐标
         width = self.canvas.winfo_width()
         height = self.canvas.winfo_height()
-        padding = 50
+        padding = 70
 
         # 绘制坐标轴
         self.canvas.create_line(padding, padding, padding, height - padding, fill='black')
@@ -160,7 +160,7 @@ class ConfigApp:
         for i in range(self.y_min, self.y_max + 1, self.y_step):
             y = height - padding - ((i - self.y_min) / (self.y_max - self.y_min)) * (height - 2 * padding)
             self.canvas.create_line(padding - 5, y, padding + 5, y, fill='black')
-            self.canvas.create_text(padding - 30, y, text=f"{i+self.y_min} MB", fill='black')
+            self.canvas.create_text(padding - 30, y, text=f"{i} MB", fill='black')
 
         # 绘制横坐标说明（时间）
         for i in range(0, self.max_points, 1):  # 每10个点一个刻度
@@ -230,11 +230,10 @@ class ConfigApp:
         self.root.destroy()
 
     def on_memory_start(self):
-        if self.m_ssh_memory and  self.m_ssh_memory.ssh_state:
+        if self.m_ssh_memory is not None and  self.m_ssh_memory.ssh_state is True:
             messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
         else:
-            #messagebox.showinfo("内存变化", "内存变化启动")
-            if self.m_ssh_memory:
+            if self.m_ssh_memory is not None:
                 self.m_ssh_memory.close()
                 self.m_ssh_memory = None
             self.m_ssh_memory = SSHConnection(self.m_config_data,self)

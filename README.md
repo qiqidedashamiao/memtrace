@@ -34,6 +34,15 @@ rm -rf list/*  \r
 rm -rf map/* \r
 rm -rf parse/list.txt \r
 
+rm -rf /mnt/appdata/mount/list/* \r
+rm -rf /share/memtrace/map/* \r
+rm -rf /mnt/appdata/mount/list.txt \r
+
+ls -lh /mnt/appdata/mount/list \r
+ls -lh /share/memtrace/map \r
+
+ls /share/234646/list/memery-*.log > list.txt
+
 
 
 字写栈帧方法
@@ -91,12 +100,51 @@ setup(
 
 python setup.py build
 生成的可执行文件会出现在 build 目录中，包含所有依赖的模块和文件。
+D:\program\install_source\python-312\python.exe main.py
 
-安装依赖插件
-import pyautogui
-pyzbar
 
-内存变化：计划
+python安装插件包：
+pip install numpy -i https://pypi.tuna.tsinghua.edu.cn/simple/
+1. 选择合适的国内镜像源
+国内有多个知名的Python包镜像源可供选择，如清华大学、阿里云、中国科学技术大学等。这些镜像源定期同步国外的PyPI仓库，因此包含了大多数常用的Python包。以下是一些常用的国内镜像源地址：
+
+清华大学：https://pypi.tuna.tsinghua.edu.cn/simple/
+阿里云：http://mirrors.aliyun.com/pypi/simple/
+中国科学技术大学：https://pypi.mirrors.ustc.edu.cn/simple/
+2. 使用pip安装时指定镜像源
+在安装Python插件时，可以通过在pip命令后加上-i参数来指定镜像源。
+
+依赖的插件包：
+D:\program\install_source\python-312\Scripts\pip3.exe install pyprogect -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install numpy -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install matplotlib -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install paramiko -i https://pypi.tuna.tsinghua.edu.cn/simple/
+#D:\program\install_source\python-312\Scripts\pip3.exe install cv2 -i https://pypi.tuna.tsinghua.edu.cn/simple/
+#pip3 install cv2 -i http://mirrors.aliyun.com/pypi/simple/
+#pip3 install cv2 -i https://pypi.mirrors.ustc.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install pyzbar -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install qrcode -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install apscheduler -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install pyautogui -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
+#D:\program\install_source\python-312\Scripts\pip3.exe install zbar -i https://pypi.tuna.tsinghua.edu.cn/simple/ --only-binary=:all
+
+D:\program\install_source\python-312\Scripts\pip3.exe install urllib -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install urllib2 -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
+内存变化：
+第一阶段：
+0、根据ssh和telnet自动选择连接方式以及是否需要校验，telnet可之后再做，dshell去掉，根据结果自动决定
 1、内存信息写入excel表格，时间+内存列
 2、展示信息横坐标按时间显示
-3、绘图显示可按照最小时间间隔，5min，30分钟，1小时显示
+    可增加选择按钮，按照最小时间间隔，5min，30分钟，1小时显示，总共显示50个点（显示的点个数可放在配置文件里）
+3、纵坐标剩余内存：
+    上下限和刻度阶梯放在设备配置里，增加一个线分割
+4、鼠标点击每个点时能显示具体信息
+    点加粗，时间，剩余内存，其他。。。
+第二阶段：
+0、支持telnet连接
+1、可支持脚本命令
+根据脚本执行设备命令
+
+内存详情监听：
