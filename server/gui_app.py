@@ -246,6 +246,13 @@ class ConfigApp:
             self.m_ssh_memory.close()
             self.m_ssh_memory = None
 
+    def update_dict_recursively(self, original, updates):
+        for key, value in updates.items():
+            if isinstance(value, dict) and key in original:
+                self.update_dict_recursively(original[key], value)
+            else:
+                original[key] = value
+
     def load_config(self):
         """从配置文件加载内容"""
         self.m_config_data = {
@@ -269,9 +276,13 @@ class ConfigApp:
             },
             "max_receive_length": 32768
         }
+        # self.logger.info(f"config_data: {self.m_config_data}")
+
         try:
             with open("config.json", "r") as config_file:
-                self.m_config_data.update(json.load(config_file))
+                # self.m_config_data.update(json.load(config_file))
+                self.update_dict_recursively(self.m_config_data, json.load(config_file))
+                # self.logger.info(f"config_data: {self.m_config_data}")
         except FileNotFoundError:
             # 如果文件不存在，使用默认值
             pass
@@ -344,7 +355,7 @@ class ConfigApp:
         configure_grid(device_frame)
         device_frame.grid_columnconfigure(0, minsize=500 * 2 / 5),  # 设置第一列的最小宽度
         device_frame.grid_columnconfigure(1, weight=1),             # 第二列可以扩展
-        device_frame.grid_rowconfigure(0, minsize=500 * 1 / 3)      # 设置第一行高度
+        device_frame.grid_rowconfigure(0, minsize=500 * 1 / 5)      # 设置第一行高度
         
         #在“设备配置”界面中添加控件
         #增加连接方式的单选按钮 ssh/telnet
@@ -356,17 +367,17 @@ class ConfigApp:
         
         # 创建Telnet单选按钮
         telnet_radio = Radiobutton(device_frame, text="Telnet连接", variable=selected_connection, value="Telnet")
-        telnet_radio.grid(row=0, column=0, sticky="se", padx=10, pady=5)
+        telnet_radio.grid(row=0, column=0, sticky="se", padx=10, pady=10)
 
         # 创建SSH单选按钮
         ssh_radio = Radiobutton(device_frame, text="SSH连接", variable=selected_connection, value="SSH")
-        ssh_radio.grid(row=0, column=1, sticky="sw", padx=10, pady=5)
+        ssh_radio.grid(row=0, column=1, sticky="se", padx=60, pady=10)
 
 
         # 创建一个用于启用/禁用验证的复选框
         verification_enabled = BooleanVar(value=True)  # 默认使能
         verification_checkbox = Checkbutton(device_frame, text="DShell", variable=verification_enabled)
-        verification_checkbox.grid(row=0, column=2, sticky="se", padx=10, pady=5)
+        verification_checkbox.grid(row=0, column=2, sticky="se", padx=10, pady=10)
 
         # 创建一个按钮用于确认选择
         #connect_button = tk.Button(device_frame, text="Connect", command=self.on_connect_mode)
@@ -389,9 +400,10 @@ class ConfigApp:
         row_index = row_index + len(devicetextlist)
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
         ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window,devicename,device_key), style="TButton").grid(row=row_index, column=0, padx=10, pady=10, sticky="se")
+
         #ttk.Button(device_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
-        ttk.Button(device_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=row_index, column=1, padx=100, pady=10, sticky="sw")
+        ttk.Button(device_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=row_index, column=1, padx=60, pady=10, sticky="sw")
         row_index+=1
 
         # 创建“编译服务器配置”子界面
@@ -415,7 +427,7 @@ class ConfigApp:
             server_entry[i] = ttk.Entry(server_frame, font=font_large)
             server_entry[i].grid(row=i, column=1, padx=10, pady=10, sticky="sw")
             if servername[i] in self.m_config_data[server_key]:
-                server_entry[i].insert(0, self.m_config_data[server_key].get(servername[i], ""))
+                server_entry[i].insert(0, self.m_config_data[server_key].get(servername[i]))
 
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
