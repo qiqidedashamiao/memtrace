@@ -1,6 +1,7 @@
 import io
 from logging import warn
 import logging
+import pdb
 from threading import local
 import sys
 import subprocess
@@ -47,12 +48,12 @@ class SSHConnection:
         self.shell = None
         self.cmdObj = MemInfoCmd(device_config,configApp)
         self.state = True
-        self.ssh_thread = threading.Thread(target=self.connect, args=())
-        self.ssh_thread.start()
-            
-        # if self.connect():
-        #     self.start()
-        #     pass
+        # self.ssh_thread = threading.Thread(target=self.connect, args=())
+        # self.ssh_thread.start()
+
+        self.connect()
+
+        # root.after(1000, self.connect)
 
     def connect(self):
         self.logger.info(f"开始创建远程连接......")
@@ -143,14 +144,13 @@ class SSHConnection:
                 
                 if not decoded_objects:
                     self.logger.info(f"未检测到二维码")
+                # pdb.set_trace()  # 设置断点
                # 遍历找到的所有二维码并打印结果
                 for obj in decoded_objects:
                     self.logger.info(f"类型:{obj.type}")
                     self.logger.info(f"数据:\r\n{obj.data.decode('utf-8')}")
                     self.logger.info(f"位置:{obj.rect}")
-                    data = obj.data.decode('utf-8')
-                    self.logger.info(f"data:{data}")
-                    ret,password = self.parse_verity(data)
+                    ret,password = self.parse_verity(obj.data.decode('utf-8'))
                     if ret:
                         break
                 
@@ -164,7 +164,7 @@ class SSHConnection:
             self.logger.info(f"输入验证码：")
             if password is None:
                 # 使用simpledialog来获取用户输入的验证码
-                password = simpledialog.askstring("验证码", "请输入验证码：")
+                password = simpledialog.askstring("验证码", "没有自动获取到验证码，请手动输入验证码：")
             #plt.close()  
             self.logger.info(f"验证码：{password}")
             self.shell.send(password + '\n')
@@ -187,15 +187,16 @@ class SSHConnection:
         self.logger.info(f"开始解析二维码信息......")
         if self.__qr_str_info_is_valid(obj):
             auth_code = self.__get_auth_code(obj)
-        if 0 == len(auth_code):
-            self.logger.error(f"没有获取到有效的授权码,请重试...")
-        elif USER_OR_PW_ERROR in auth_code:
-            self.logger.error(f"用户名或密码错误, 当前账号: {self.__get_param_value_from_url_by_key(obj, "u")}")
-        elif URL_OPEN_ERROR in auth_code:
-            self.logger.error(f"打开链接失败,请重试...")
-        else:
-            self.logger.info(f"分析成功, 授权码:{auth_code}")
-            return True,auth_code
+            if 0 == len(auth_code):
+                self.logger.error(f"没有获取到有效的授权码,请重试...")
+            elif USER_OR_PW_ERROR in auth_code:
+                self.logger.error(f"用户名或密码错误, 当前账号: {self.__get_param_value_from_url_by_key(obj, "u")}")
+            elif URL_OPEN_ERROR in auth_code:
+                self.logger.error(f"打开链接失败,请重试...")
+            else:
+                self.logger.info(f"分析成功, 授权码:{auth_code}")
+                return True,auth_code
+        self.logger.error(f"没有获取到有效的授权码,请重试...")
         return False,None
 
     def __get_auth_code(self, qr_str_info):
@@ -280,13 +281,6 @@ class SSHConnection:
     def start(self):
         self.cmdObj.start(self.shell)
 
-    def parse_verity(self, obj):
-        if obj.data.decode('utf-8') == self.user:
-            self.logger.info(f"验证通过")
-            return True,obj.data.decode('utf-8')
-        else:
-            self.logger.info(f"验证失败")
-            return False,None
 
 
 

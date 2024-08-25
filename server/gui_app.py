@@ -230,13 +230,13 @@ class ConfigApp:
         self.root.destroy()
 
     def on_memory_start(self):
-        if self.m_ssh_memory is not None and  self.m_ssh_memory.ssh_state is True:
+        if self.m_ssh_memory is not None and  self.m_ssh_memory.state is True:
             messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
         else:
             if self.m_ssh_memory is not None:
                 self.m_ssh_memory.close()
                 self.m_ssh_memory = None
-            self.m_ssh_memory = SSHConnection(self.m_config_data,self)
+            self.m_ssh_memory = SSHConnection(self.m_config_data,self,self)
 
     def on_memory_stop(self):
         messagebox.showinfo("内存变化", "内存变化停止")
@@ -244,6 +244,8 @@ class ConfigApp:
             self.logger.info("关闭内存变化")
             self.m_ssh_memory.close()
             self.m_ssh_memory = None
+
+    
 
     def update_dict_recursively(self, original, updates):
         for key, value in updates.items():
