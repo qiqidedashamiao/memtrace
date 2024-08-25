@@ -3,7 +3,7 @@ import json
 import logging
 import threading
 import tkinter as tk
-from tkinter import BooleanVar, Checkbutton, Radiobutton, StringVar, messagebox
+from tkinter import BooleanVar, Checkbutton, OptionMenu, Radiobutton, StringVar, messagebox
 from tkinter import ttk
 from tkinter import scrolledtext
 from tkinter import font
@@ -86,8 +86,8 @@ class ConfigApp:
         
         self.load_config()
 
-    def start_chart(self, mem_available):
-        """开始动态更新图表并打开新窗口"""
+    def start_chart(self, change_type, mem_available):
+        """开始动态更新图表并打开新窗口""" 
         if self.chart_window is None or not self.is_running:
             # 创建一个新的窗口
             self.chart_window = tk.Toplevel(self.root)
@@ -96,20 +96,36 @@ class ConfigApp:
 
             # 创建 Canvas 组件
             self.canvas = tk.Canvas(self.chart_window, width=800, height=400, bg='white')
-            self.canvas.pack()
+            self.canvas.grid(row=0, column=0, columnspan=4)
+            # self.canvas.pack()
 
+            self.show_interval = StringVar(value="1")
+            # 创建单选下拉框
+            intervals = ["1", "10", "100", "1000"]
+            self.interval_menu = OptionMenu(self.root, self.show_interval, *intervals, command=self.update_chart)
+            self.interval_menu.grid(row=1, column=0, columnspan=4, pady=10)
+            self.index_map = {"1": 0, "10": 1, "100": 2, "1000": 3}
             # 初始化绘图数据
-            self.data = []
+            self.data = [[],[],[]]
             self.max_points = 20
             self.update_interval = 5000  # 5秒更新一次
             self.y_min = 7000
             self.y_max = 7300
             self.y_step = 50
-            self.point_tags = []  # 存储数据点的标签
-
+            self.point_tags = [[],[],[]]  # 存储数据点的标签
+            self.change_type = 0
             # 设置图表为运行状态
             self.is_running = True
-        self.update_chart(mem_available)
+            # 在 Canvas 上放置下拉框
+            self.canvas.create_window(500, 30, window=self.interval_menu)
+        
+        self.logger.info(f"mem_available: {mem_available}, is_running: {self.is_running}")
+        for i in range(change_type):
+            if len(self.data[i]) >= self.max_points:
+                self.data[i].pop(0)
+            self.data[i].append(mem_available)
+        # intervals = ["1", "10", "100", "1000"]
+        self.draw_chart()
 
     def close_chart(self):
         """关闭图表窗口"""
@@ -118,18 +134,21 @@ class ConfigApp:
             self.chart_window.destroy()
             self.chart_window = None
 
-    def update_chart(self, mem_available):
+    def update_chart(self, *args):
         """更新图表数据"""
-        self.logger.info(f"mem_available: {mem_available}, is_running: {self.is_running}")
-        if not self.is_running:
-            return  # 如果不再运行，停止更新
+        # if not self.is_running:
+        #     return  # 如果不再运行，停止更新
 
         # 模拟接收内存信息（实际应从客户端接收数据）
         #mem_available = random.randint(100000, 200000)  # 模拟的内存值
         # 记录数据
-        if len(self.data) >= self.max_points:
-            self.data.pop(0)
-        self.data.append(mem_available)
+        # for i in range(change_type):
+        #     if len(self.data[i]) >= self.max_points:
+        #         self.data[i].pop(0)
+        #     self.data[i].append(mem_available)
+        # if len(self.data) >= self.max_points:
+        #     self.data.pop(0)
+        # self.data.append(mem_available)
 
         # 绘制图表
         self.draw_chart()
@@ -140,20 +159,28 @@ class ConfigApp:
 
     def draw_chart(self):
         """绘制折线图"""
-        
+        if not self.is_running:
+            return  # 如果不再运行，停止更新
         self.canvas.delete("all")  # 清除之前的图形
+        
         self.point_tags = []  # 每次更新清空点标签列表
+
+        # 再次绘制下拉框（防止被清除）
+        self.canvas.create_window(500, 30, window=self.interval_menu)
 
         # 计算数据点的坐标
         width = self.canvas.winfo_width()
         height = self.canvas.winfo_height()
         padding = 70
 
+        # 根据选择的间隔调整显示
+        index = self.index_map[self.show_interval.get()]
+
         # 绘制坐标轴
         self.canvas.create_line(padding, padding, padding, height - padding, fill='black')
         self.canvas.create_line(padding, height - padding, width - padding, height - padding, fill='black')
 
-        if len(self.data) < 2:
+        if len(self.data[index]) < 2:
             return
 
         # 绘制纵坐标刻度和说明
@@ -177,7 +204,7 @@ class ConfigApp:
         y_scale = (height - 2 * padding) / (self.y_max - self.y_min)
 
         points = []
-        for i, value in enumerate(self.data):
+        for i, value in enumerate(self.data[index]):
             x = padding + i * x_scale
             y = height - padding - (value - self.y_min) * y_scale
             points.extend((x, y))
@@ -236,7 +263,7 @@ class ConfigApp:
             if self.m_ssh_memory is not None:
                 self.m_ssh_memory.close()
                 self.m_ssh_memory = None
-            self.m_ssh_memory = SSHConnection(self.m_config_data,self,self)
+            self.m_ssh_memory = SSHConnection(self.m_config_data,self)
 
     def on_memory_stop(self):
         messagebox.showinfo("内存变化", "内存变化停止")
@@ -262,7 +289,7 @@ class ConfigApp:
                 "username": "admin",
                 "password": "7ujMko0admin123",
                 "interval": 1,
-                "dshell": True,
+                # "dshell": True,
                 "telnet": False
             },
             "server": {
@@ -375,20 +402,20 @@ class ConfigApp:
         ssh_radio.grid(row=0, column=1, sticky="se", padx=60, pady=10)
 
 
-        # 创建一个用于启用/禁用验证的复选框
-        verification_enabled = BooleanVar(value=True)  # 默认使能
-        verification_checkbox = Checkbutton(device_frame, text="DShell", variable=verification_enabled)
-        verification_checkbox.grid(row=0, column=2, sticky="se", padx=10, pady=10)
+        # # 创建一个用于启用/禁用验证的复选框
+        # verification_enabled = BooleanVar(value=True)  # 默认使能
+        # verification_checkbox = Checkbutton(device_frame, text="DShell", variable=verification_enabled)
+        # verification_checkbox.grid(row=0, column=2, sticky="se", padx=10, pady=10)
 
         # 创建一个按钮用于确认选择
         #connect_button = tk.Button(device_frame, text="Connect", command=self.on_connect_mode)
         #connect_button.grid(row=0, column=0, pady=10)
 
         devicetextlist = ["IP:", "用户名:", "密码:", "采样时间:"]
-        devicename = ["connect_mode","dshell", "host", "username", "password", "interval"]
-        device_entry = [selected_connection,verification_enabled]  # Define the device_entry dictionary
+        devicename = ["connect_mode", "host", "username", "password", "interval"]
+        device_entry = [selected_connection]  # Define the device_entry dictionary
         device_key = "device"
-        index = 2
+        index = len(device_entry)
         row_index = 1
         for i in range(len(devicetextlist)):
             ttk.Label(device_frame, text=devicetextlist[i], font=font_large).grid(row=i+row_index, column=0, padx=10, pady=10, sticky="se")
@@ -399,8 +426,9 @@ class ConfigApp:
                 device_entry[i+index].insert(0, self.m_config_data[device_key].get(devicename[i+index]))  # Set default value
         
         row_index = row_index + len(devicetextlist)
+        device_dict_int = {"interval"}
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
-        ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window,devicename,device_key), style="TButton").grid(row=row_index, column=0, padx=10, pady=10, sticky="se")
+        ttk.Button(device_frame, text="保存", command=lambda: self.save_config_device(device_entry,config_window,devicename,device_key,device_dict_int), style="TButton").grid(row=row_index, column=0, padx=10, pady=10, sticky="se")
 
         #ttk.Button(device_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
@@ -442,7 +470,7 @@ class ConfigApp:
 
         #messagebox.showinfo("配置选项", "配置选项被点击")
     
-    def save_config_device(self, device_entry, config_window,name,key):
+    def save_config_device(self, device_entry, config_window,name,key,dict_int):
         """保存输入内容到配置文件"""
         # config_data = {
         #     "device_ip": device_entry[0].get(),
@@ -451,7 +479,7 @@ class ConfigApp:
         #     "device_interval": device_entry[3].get()
         # }
         config_data = {}
-        config_data[key] = {name[i]: device_entry[i].get() for i in range(len(device_entry))}
+        config_data[key] = {name[i]: int(device_entry[i].get()) if name[i] in dict_int else device_entry[i].get() for i in range(len(device_entry))}
         self.logger.info(f"config_data: {config_data}")
 
         self.m_config_data.update(config_data)

@@ -85,6 +85,7 @@ class SSHConnection:
     def login(self):
         self.logger.info(f"开始登录......")
         try:
+            output = ""
             # 读取初始提示符
             time.sleep(1)
             if self.shell.recv_ready():
@@ -92,8 +93,13 @@ class SSHConnection:
                 self.logger.info(f"{output}")
                 #print(output)
             
-            self.shell.send('python3 /root/mount/share/memtrace/server/erweima.py' + '\n')
+            # self.shell.send('python3 /root/mount/share/memtrace/server/erweima.py' + '\n')
 
+            if "help" not in output:
+                self.logger.info(f"不需要验证码")
+                self.logger.info(f"登录成功")
+                return True
+            self.logger.info(f"需要验证码")
             self.logger.info(f"发送shell:")
             # 输入shell命令
             user_input = "shell"

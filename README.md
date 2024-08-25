@@ -129,8 +129,8 @@ D:\program\install_source\python-312\Scripts\pip3.exe install pyautogui -i https
 
 #D:\program\install_source\python-312\Scripts\pip3.exe install zbar -i https://pypi.tuna.tsinghua.edu.cn/simple/ --only-binary=:all
 
-D:\program\install_source\python-312\Scripts\pip3.exe install urllib -i https://pypi.tuna.tsinghua.edu.cn/simple/
-D:\program\install_source\python-312\Scripts\pip3.exe install urllib2 -i https://pypi.tuna.tsinghua.edu.cn/simple/
+D:\program\install_source\python-312\Scripts\pip3.exe install openpyxl -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
 
 内存变化：
 第一阶段：
