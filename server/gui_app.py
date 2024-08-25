@@ -102,7 +102,7 @@ class ConfigApp:
             self.show_interval = StringVar(value="1")
             # 创建单选下拉框
             intervals = ["1", "10", "100", "1000"]
-            self.interval_menu = OptionMenu(self.root, self.show_interval, *intervals, command=self.update_chart)
+            self.interval_menu = OptionMenu(self.chart_window, self.show_interval, *intervals, command=self.update_chart)
             self.interval_menu.grid(row=1, column=0, columnspan=4, pady=10)
             self.index_map = {"1": 0, "10": 1, "100": 2, "1000": 3}
             # 初始化绘图数据
@@ -117,7 +117,7 @@ class ConfigApp:
             # 设置图表为运行状态
             self.is_running = True
             # 在 Canvas 上放置下拉框
-            self.canvas.create_window(500, 30, window=self.interval_menu)
+            self.canvas.create_window(100, 50, window=self.interval_menu)
         
         self.logger.info(f"mem_available: {mem_available}, is_running: {self.is_running}")
         for i in range(change_type):
@@ -166,7 +166,7 @@ class ConfigApp:
         self.point_tags = []  # 每次更新清空点标签列表
 
         # 再次绘制下拉框（防止被清除）
-        self.canvas.create_window(500, 30, window=self.interval_menu)
+        self.canvas.create_window(100, 50, window=self.interval_menu)
 
         # 计算数据点的坐标
         width = self.canvas.winfo_width()
@@ -175,6 +175,7 @@ class ConfigApp:
 
         # 根据选择的间隔调整显示
         index = self.index_map[self.show_interval.get()]
+        self.logger.info(f"index: {index}")
 
         # 绘制坐标轴
         self.canvas.create_line(padding, padding, padding, height - padding, fill='black')

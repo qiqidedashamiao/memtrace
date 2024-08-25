@@ -2,6 +2,7 @@
 from datetime import datetime
 import logging
 import os
+import pdb
 import queue
 import re
 import sched
@@ -56,15 +57,19 @@ class MemInfoCmd:
         self.scheduler.start()
         self.scheduler.add_job(self.get_meminfo, IntervalTrigger(seconds=self.interval))
         
-        self.process_thread = threading.Thread(target=self.process, args=())
-        self.process_thread.start()
+        # self.process_thread = threading.Thread(target=self.process, args=())
+        # self.process_thread.start()
 
     def process(self):
         # 10: interval*10, 100: interval*100 1000: interval*1000
         change_types = [1000,100,10]
         change_counts = 0
-        
+        self.logger.info(f"process")
+        # pdb.set_trace()  # 设置断点
         while self.is_running:
+            
+            # pdb.set_trace()  # 设置断点
+            self.logger.info(f"meminfo_queue:{self.meminfo_queue.qsize()}")
             if not self.meminfo_queue.empty():
                 meminfo_tuple = self.meminfo_queue.get()
                 meminfo_dict = {}
@@ -133,7 +138,7 @@ class MemInfoCmd:
             current_time = datetime.now()
             meminfo_tuple = (current_time, output)
             # current_time_str = current_time.strftime("%H:%M:%S")
-            self.meminfo_queue.put(meminfo_tuple)
+            # self.meminfo_queue.put(meminfo_tuple)
             #加上毫秒格式
             #current_time_str += f".{current_time.microsecond // 1000}"
 
@@ -151,6 +156,21 @@ class MemInfoCmd:
             #         return int(line.split()[1])  # 返回MemAvailable的值
 
             #self.meminfo.append(output)
+            change_types = [1000,100,10]
+            change_counts = 0
+            meminfo_dict = {}
+            meminfo_dict["Time"] = meminfo_tuple[0].strftime("%Y-%m-%d %H-%M-%S")
+
+            meminfo_dict = self.parse_meminfo(meminfo_tuple[1],meminfo_dict)
+            change_counts += 1
+            change_type = 3
+            for i in range(len(change_types)):
+                if change_counts % change_types[i] == 0:
+                    change_type = i
+                    break
+
+            self.configApp.start_chart(3 - change_type,meminfo_dict["MemAvailable"]/1024)
+            self.write_to_excel(self.filename, meminfo_dict)
 
         # if self.is_running:
         #     self.timer = threading.Timer(self.interval, self.get_meminfo)
@@ -170,7 +190,7 @@ class MemInfoCmd:
             self.scheduler.shutdown(wait=False)  # 关闭调度器
         self.logger.info(f"stop")
         self.configApp.close_chart()
-        self.process_thread.join()
+        # self.process_thread.join()
 
 
 
