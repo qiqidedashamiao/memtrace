@@ -1,6 +1,7 @@
 
 import json
 import logging
+import pdb
 import threading
 import tkinter as tk
 from tkinter import BooleanVar, Checkbutton, OptionMenu, Radiobutton, StringVar, messagebox
@@ -119,11 +120,14 @@ class ConfigApp:
             # 在 Canvas 上放置下拉框
             self.canvas.create_window(100, 50, window=self.interval_menu)
         
-        self.logger.info(f"mem_available: {mem_available}, is_running: {self.is_running}")
+        self.logger.info(f"mem_available: {mem_available}, is_running: {self.is_running}, change_type: {change_type}")
+        
+        # pdb.set_trace()  # 设置断点
         for i in range(change_type):
             if len(self.data[i]) >= self.max_points:
                 self.data[i].pop(0)
             self.data[i].append(mem_available)
+            self.logger.info(f"self.data: {self.data[i]}")
         # intervals = ["1", "10", "100", "1000"]
         self.draw_chart()
 
@@ -181,7 +185,8 @@ class ConfigApp:
         self.canvas.create_line(padding, padding, padding, height - padding, fill='black')
         self.canvas.create_line(padding, height - padding, width - padding, height - padding, fill='black')
 
-        if len(self.data[index]) < 2:
+        self.logger.info(f"self.data: {self.data[index]}")
+        if len(self.data[index]) < 1:
             return
 
         # 绘制纵坐标刻度和说明
@@ -190,12 +195,14 @@ class ConfigApp:
             self.canvas.create_line(padding - 5, y, padding + 5, y, fill='black')
             self.canvas.create_text(padding - 30, y, text=f"{i} MB", fill='black')
 
+        self.index_map = {0: 1, 1: 10, "100": 2, "1000": 3}
+
         # 绘制横坐标说明（时间）
         for i in range(0, self.max_points, 1):  # 每10个点一个刻度
             x = padding + i * (width - 2 * padding) / (self.max_points - 1)
             self.canvas.create_line(x, height - padding - 5, x, height - padding + 5, fill='black')
             #self.canvas.create_text(x, height - padding + 20, text=f"{i*5//60}:{i*5%60:02d}", fill='black')
-            self.canvas.create_text(x, height - padding + 20, text=f"{i*5} s", fill='black')
+            self.canvas.create_text(x, height - padding + 20, text=f"{i*(index+1)} s", fill='black')
         
 
         # 计算折线的坐标点

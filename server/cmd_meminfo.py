@@ -44,6 +44,8 @@ class MemInfoCmd:
         # self.is_running = False
 
         self.scheduler = BackgroundScheduler()
+        
+        self.change_counts = 0
 
 
     def start(self, shell):
@@ -157,19 +159,18 @@ class MemInfoCmd:
 
             #self.meminfo.append(output)
             change_types = [1000,100,10]
-            change_counts = 0
             meminfo_dict = {}
             meminfo_dict["Time"] = meminfo_tuple[0].strftime("%Y-%m-%d %H-%M-%S")
 
             meminfo_dict = self.parse_meminfo(meminfo_tuple[1],meminfo_dict)
-            change_counts += 1
+            self.change_counts += 1
             change_type = 3
             for i in range(len(change_types)):
-                if change_counts % change_types[i] == 0:
+                if self.change_counts % change_types[i] == 0:
                     change_type = i
                     break
 
-            self.configApp.start_chart(3 - change_type,meminfo_dict["MemAvailable"]/1024)
+            self.configApp.start_chart(4 - change_type,meminfo_dict["MemAvailable"]/1024)
             self.write_to_excel(self.filename, meminfo_dict)
 
         # if self.is_running:
