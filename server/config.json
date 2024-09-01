@@ -1,21 +1,33 @@
 {
     "device": {
+        "connect_mode": "SSH",
         "host": "192.168.0.14",
         "username": "root",
         "password": "Aa123456",
-        "interval": 1,
-        "telnet": false,
-        "connect_mode": "SSH"
+        "interval": 1
     },
     "server": {
         "ip": "192.168.0.14",
         "username": "root",
         "password": "Aa123456",
-        "cross": ""
+        "cross": "1111"
     },
     "user": {
         "username": "234646",
         "password": "12Dec2030!"
     },
-    "max_receive_length": 32768
+    "max_receive_length": 32768,
+    "host": "",
+    "username": "admin",
+    "password": "7ujMko0admin123",
+    "interval": 1,
+    "telnet": false,
+    "ip": "",
+    "cross": "",
+    "port": 65511,
+    "num": 45,
+    "result_path": "",
+    "lib_path": "",
+    "is_aslr": false,
+    "is_backtrace": false
 }

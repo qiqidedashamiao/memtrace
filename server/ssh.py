@@ -34,7 +34,9 @@ URL_OPEN_ERROR = "urlopen error"
 #定义一个ssh连接类，包含创建连接，登录，定时获取内存信息等功能
 class SSHConnection:
     def __init__(self, device_config,configApp):
+        
         self.logger = logging.getLogger("master")
+        self.logger.info(f"device_config:{device_config}")
         self.host = device_config["device"]["host"]
         self.username = device_config["device"]["username"]
         self.password = device_config["device"]["password"]

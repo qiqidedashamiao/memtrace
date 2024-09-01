@@ -1,5 +1,6 @@
 import io
 import logging
+import pdb
 import sys
 from collections import defaultdict
 
@@ -8,6 +9,7 @@ import tkinter as tk
 import struct
 
 from gui_app import ConfigApp
+from memorystat.mem_stat_init import mem_stat_init
 
 if __name__ == "__main__":
     #pass
@@ -24,4 +26,8 @@ if __name__ == "__main__":
 
     root = tk.Tk()
     app = ConfigApp(root)
+
+    mem_stat_init(app,"server","内存统计")
+    app.start()
     root.mainloop()
+

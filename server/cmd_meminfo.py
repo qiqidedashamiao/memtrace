@@ -61,6 +61,7 @@ class MemInfoCmd:
         
         # self.process_thread = threading.Thread(target=self.process, args=())
         # self.process_thread.start()
+        self.logger.info(f"start end")
 
     def process(self):
         # 10: interval*10, 100: interval*100 1000: interval*1000
@@ -161,17 +162,20 @@ class MemInfoCmd:
             change_types = [1000,100,10]
             meminfo_dict = {}
             meminfo_dict["Time"] = meminfo_tuple[0].strftime("%Y-%m-%d %H-%M-%S")
+            time_str = meminfo_tuple[0].strftime("%H:%M:%S")
 
             meminfo_dict = self.parse_meminfo(meminfo_tuple[1],meminfo_dict)
-            self.change_counts += 1
+
             change_type = 3
             for i in range(len(change_types)):
                 if self.change_counts % change_types[i] == 0:
                     change_type = i
                     break
-
-            self.configApp.start_chart(4 - change_type,meminfo_dict["MemAvailable"]/1024)
-            self.write_to_excel(self.filename, meminfo_dict)
+            self.change_counts += 1
+            if self.is_running:
+                self.write_to_excel(self.filename, meminfo_dict)
+                self.configApp.start_chart(4 - change_type,meminfo_dict["MemAvailable"]/1024, time_str)
+            
 
         # if self.is_running:
         #     self.timer = threading.Timer(self.interval, self.get_meminfo)

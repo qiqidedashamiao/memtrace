@@ -11,6 +11,8 @@ import struct
 
 from gui_app import ConfigApp
 
+MEMOP_MALLOC = 3
+
 # 定义结构体的格式字符串
 # < 表示小端序，b 表示 int8，h 表示 int16，I 表示 unsigned int，q 表示 64 位指针 (void*)
 # 结构体总大小 = 1 + 1 + 2 + 4 + 4 + 8 + 8 + 8 + (8 * 5) = 76 bytes
@@ -70,9 +72,11 @@ def handle_client(conn, addr):
     print(f"Connected by {addr}")
     try:
         while True:
-            data = conn.recv(1024).decode()
-            if not data:
+            mem_type = conn.recv(1).decode()
+            if not mem_type:
                 break
+            if mem_type == MEMOP_MALLOC:
+                
             # 假设数据格式为 "thread_id,size"
             thread_id, size = data.split(',')
             size = int(size)

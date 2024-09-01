@@ -12,9 +12,10 @@ from tkinter import font
 from ssh import SSHConnection
 
 class ConfigApp:
-    m_config_data = {}
+    # m_config_data = {}
     m_ssh_memory = None
     def __init__(self, root):
+        
          # 初始化绘图变量
         self.chart_window = None  # 折线图窗口
         self.is_running = False   # 用于控制图表更新的状态
@@ -61,8 +62,9 @@ class ConfigApp:
         config_menu = tk.Menu(menu_bar, tearoff=0)
         config_menu.add_command(label="配置", command=self.on_configure_option)
         #config_menu.add_command(label="编译服务器配置", command=self.on_configure_option)
-        config_menu.add_separator()  # 添加分割线
-        config_menu.add_command(label="退出", command=root.quit)
+        # config_menu.add_separator()  # 添加分割线
+        # config_menu.add_command(label="退出", command=root.quit)
+        self.config_menu = config_menu
 
         # 创建“工具”菜单
         tool_menu = tk.Menu(menu_bar, tearoff=0)
@@ -76,18 +78,36 @@ class ConfigApp:
         tool_menu.add_cascade(label="内存变化", menu=memory_change_menu)
         #tool_menu.add_command(label="内存变化", command=self.on_tool_option)
         tool_menu.add_command(label="内存使用", command=self.on_tool_option)
+        self.tool_menu = tool_menu
 
         # 将“配置”和“工具”菜单添加到菜单栏
         menu_bar.add_cascade(label="选项", menu=config_menu, font=("Arial", 14))
         menu_bar.add_cascade(label="工具", menu=tool_menu, font=("Arial", 14))
         #menu_bar.entryconfig("选项", padding=20)
+        self.menu_bar = menu_bar
 
-        # 将菜单栏设置为主窗口的菜单
-        root.config(menu=menu_bar)
         
+        self.m_config_data = {} 
         self.load_config()
+        self.m_config_filename = "config.json"
 
-    def start_chart(self, change_type, mem_available):
+        
+    
+    def get_config_menu(self):
+        return self.config_menu
+    
+    def get_tool_menu(self):
+        return self.tool_menu
+    
+    def get_menu(self):
+        return self.menu_bar
+
+    def start(self):
+        # self.load_config()
+        self.root.config(menu=self.menu_bar)
+        pass
+
+    def start_chart(self, change_type, mem_available,time_str):
         """开始动态更新图表并打开新窗口""" 
         if self.chart_window is None or not self.is_running:
             # 创建一个新的窗口
@@ -106,14 +126,17 @@ class ConfigApp:
             self.interval_menu = OptionMenu(self.chart_window, self.show_interval, *intervals, command=self.update_chart)
             self.interval_menu.grid(row=1, column=0, columnspan=4, pady=10)
             self.index_map = {"1": 0, "10": 1, "100": 2, "1000": 3}
+            interval = self.m_config_data["device"]["interval"]
+            self.step_map = {0:interval, 1:interval*10, 2:interval*100, 3:interval*1000}
             # 初始化绘图数据
-            self.data = [[],[],[]]
+            self.data = [[],[],[],[]]
+            self.time_str = [[],[],[],[]]
             self.max_points = 20
             self.update_interval = 5000  # 5秒更新一次
             self.y_min = 7000
             self.y_max = 7300
             self.y_step = 50
-            self.point_tags = [[],[],[]]  # 存储数据点的标签
+            self.point_tags = [[],[],[],[]]  # 存储数据点的标签
             self.change_type = 0
             # 设置图表为运行状态
             self.is_running = True
@@ -126,17 +149,21 @@ class ConfigApp:
         for i in range(change_type):
             if len(self.data[i]) >= self.max_points:
                 self.data[i].pop(0)
+                self.time_str[i].pop(0)
             self.data[i].append(mem_available)
+            self.time_str[i].append(time_str)
             self.logger.info(f"self.data: {self.data[i]}")
+            self.logger.info(f"self.time_str: {self.time_str[i]}")
         # intervals = ["1", "10", "100", "1000"]
         self.draw_chart()
 
     def close_chart(self):
         """关闭图表窗口"""
-        self.is_running = False  # 停止图表更新
+        self.logger.info("关闭图表窗口")
         if self.chart_window:
             self.chart_window.destroy()
             self.chart_window = None
+        self.is_running = False  # 停止图表更新
 
     def update_chart(self, *args):
         """更新图表数据"""
@@ -195,14 +222,15 @@ class ConfigApp:
             self.canvas.create_line(padding - 5, y, padding + 5, y, fill='black')
             self.canvas.create_text(padding - 30, y, text=f"{i} MB", fill='black')
 
-        self.index_map = {0: 1, 1: 10, "100": 2, "1000": 3}
-
         # 绘制横坐标说明（时间）
-        for i in range(0, self.max_points, 1):  # 每10个点一个刻度
+        for i in range(0, len(self.data[index]), 1):  # 每10个点一个刻度
             x = padding + i * (width - 2 * padding) / (self.max_points - 1)
             self.canvas.create_line(x, height - padding - 5, x, height - padding + 5, fill='black')
             #self.canvas.create_text(x, height - padding + 20, text=f"{i*5//60}:{i*5%60:02d}", fill='black')
-            self.canvas.create_text(x, height - padding + 20, text=f"{i*(index+1)} s", fill='black')
+            # self.canvas.create_text(x, height - padding + 20, text=f"{i*(self.step_map[index])} s", fill='black')
+            #纵向显示时间
+
+            self.canvas.create_text(x, height - padding + 30, text=f"{self.time_str[index][i]}", fill='black',angle=90)
         
 
         # 计算折线的坐标点
@@ -224,6 +252,8 @@ class ConfigApp:
             # 绑定鼠标点击事件
             self.canvas.tag_bind(point_id, "<Button-1>", lambda event, v=value, x=x, y=y: self.show_value(event, v, x, y))
 
+        if len(self.data[index]) < 2:
+            return
         # 绘制折线
         self.canvas.create_line(points, fill='blue')
     def show_value(self, event, value, x, y):
@@ -265,6 +295,8 @@ class ConfigApp:
         self.root.destroy()
 
     def on_memory_start(self):
+        self.logger.info("内存变化开始")
+        self.logger.info(f"m_config_data: {self.m_config_data}")
         if self.m_ssh_memory is not None and  self.m_ssh_memory.state is True:
             messagebox.showinfo("内存变化", "功能已经开启，请先停止再启动")
         else:
@@ -280,18 +312,35 @@ class ConfigApp:
             self.m_ssh_memory.close()
             self.m_ssh_memory = None
 
-    
+    def init_default_cfg(self, config):
+        """初始化默认配置"""
+        #config中键值对不在self.m_config_data中的，添加到self.m_config_data中，有可能是内层的键值对
+        # update_dict_recursively = lambda original, updates: [original.update({key: value}) if key not in original else update_dict_recursively(original[key], value) for key, value in updates.items()]
+        self.update_dict_recursively(self.m_config_data, config)
+        # for key, value in config.items():
+        #     if key not in self.m_config_data:
+        #         self.m_config_data[key] = value
+        #     elif isinstance(value, dict):
+        #         self.init_default_cfg(value)
+        self.logger.info(f"m_config_data: {self.m_config_data}")
 
     def update_dict_recursively(self, original, updates):
         for key, value in updates.items():
-            if isinstance(value, dict) and key in original:
-                self.update_dict_recursively(original[key], value)
-            else:
+            if key not in original:
                 original[key] = value
+            elif isinstance(value, dict):
+                self.update_dict_recursively(original[key], value)
+
+    # def update_dict_recursively(self, original, updates):
+    #     for key, value in updates.items():
+    #         if isinstance(value, dict) and key in original:
+    #             self.update_dict_recursively(original[key], value)
+    #         else:
+    #             original[key] = value
 
     def load_config(self):
         """从配置文件加载内容"""
-        self.m_config_data = {
+        config = {
             "device": {
                 "host": "",
                 "username": "admin",
@@ -316,16 +365,19 @@ class ConfigApp:
 
         try:
             with open("config.json", "r") as config_file:
+                self.m_config_data = json.load(config_file)
                 # self.m_config_data.update(json.load(config_file))
-                self.update_dict_recursively(self.m_config_data, json.load(config_file))
+                # self.update_dict_recursively(self.m_config_data, json.load(config_file))
                 # self.logger.info(f"config_data: {self.m_config_data}")
         except FileNotFoundError:
             # 如果文件不存在，使用默认值
+            self.m_config_data = {}
             pass
-
-        with open("config.json", "w") as config_file:
-            json.dump(self.m_config_data, config_file, indent=4)
+        
         self.logger.info(f"config_data: {self.m_config_data}")
+        self.init_default_cfg(config)
+        # with open("config.json", "w") as config_file:
+        #     json.dump(self.m_config_data, config_file, indent=4)
 
     def on_configure_option(self):
         
@@ -366,6 +418,7 @@ class ConfigApp:
         username = ["username", "password"]
         user_entry = {}  # Define the device_entry dictionary
         user_key = "user"
+        user_dict_init = {}
         for i in range(len(usertextlist)):
             ttk.Label(user_frame, text=usertextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
             user_entry[i] = ttk.Entry(user_frame, font=font_large)
@@ -374,7 +427,7 @@ class ConfigApp:
                 user_entry[i].insert(0, self.m_config_data[user_key].get(username[i]))  # Set default value
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
-        ttk.Button(user_frame, text="保存", command=lambda: self.save_config_device(user_entry,config_window,username,user_key), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        ttk.Button(user_frame, text="保存", command=lambda: self.save_config_device(user_entry,config_window,username,user_key,user_dict_init), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
         #ttk.Button(user_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
         ttk.Button(user_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
@@ -459,6 +512,7 @@ class ConfigApp:
         servername = ["ip", "username", "password", "cross"]
         server_entry = {}  # Define the server_entry dictionary
         server_key = "server"
+        server_dict_int = {}
         for i in range(len(servertextlist)):
             ttk.Label(server_frame, text=servertextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
             server_entry[i] = ttk.Entry(server_frame, font=font_large)
@@ -468,7 +522,7 @@ class ConfigApp:
 
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
-        ttk.Button(server_frame, text="保存", command=lambda: self.save_config_device(server_entry,config_window,servername,server_key), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        ttk.Button(server_frame, text="保存", command=lambda: self.save_config_device(server_entry,config_window,servername,server_key,server_dict_int), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
         #ttk.Button(device_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
         ttk.Button(server_frame, text="退出", command=lambda: self.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
