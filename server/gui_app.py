@@ -77,11 +77,11 @@ class ConfigApp:
         # 将“内存变化”子菜单添加到“工具”菜单中
         tool_menu.add_cascade(label="内存变化", menu=memory_change_menu)
         #tool_menu.add_command(label="内存变化", command=self.on_tool_option)
-        tool_menu.add_command(label="内存使用", command=self.on_tool_option)
+        # tool_menu.add_command(label="内存使用", command=self.on_tool_option)
         self.tool_menu = tool_menu
 
         # 将“配置”和“工具”菜单添加到菜单栏
-        menu_bar.add_cascade(label="选项", menu=config_menu, font=("Arial", 14))
+        menu_bar.add_cascade(label="配置", menu=config_menu, font=("Arial", 14))
         menu_bar.add_cascade(label="工具", menu=tool_menu, font=("Arial", 14))
         #menu_bar.entryconfig("选项", padding=20)
         self.menu_bar = menu_bar
@@ -101,6 +101,12 @@ class ConfigApp:
     
     def get_menu(self):
         return self.menu_bar
+    
+    def get_config_data(self):
+        return self.m_config_data
+    
+    def get_logger(self):
+        return self.logger
 
     def start(self):
         # self.load_config()

@@ -4,13 +4,13 @@
         "host": "192.168.0.14",
         "username": "root",
         "password": "Aa123456",
-        "interval": 1
+        "interval": 1,
+        "telnet": false
     },
     "server": {
-        "ip": "192.168.0.14",
-        "username": "root",
-        "password": "Aa123456",
-        "cross": "1111"
+        "host": "192.168.0.20",
+        "port": 65511,
+        "result_path": ""
     },
     "user": {
         "username": "234646",

@@ -20,7 +20,8 @@ class MemStatCfg:
     def init_default_cfg():
         config = {
             "server": {
-                "port": 65511,      # 编译服务器端口
+                "host": "",         # 主机地址
+                "port": 65511,      # 主机端口
                 "result_path":"",   # 内存统计结果路径
                 "ip": "",           # 编译服务器ip
                 "username": "",     # 编译服务器用户名
@@ -75,8 +76,8 @@ class MemStatCfg:
         configure_grid(base_frame)
         
         #在“用户配置”界面中添加控件
-        basetextlist = ["端口号:", "输出路径:"]
-        basename = ["port", "result_path"]
+        basetextlist = ["主机地址", "监听端口号:", "输出路径:"]
+        basename = ["host", "port", "result_path"]
         base_entry = {}  # Define the device_entry dictionary
         base_key = "server"
         base_dict_int = {"port"}
@@ -88,7 +89,7 @@ class MemStatCfg:
                 base_entry[i].insert(0, app.m_config_data[base_key].get(basename[i]))  # Set default value
         
         # 创建保存配置按钮，将IP、用户名、密码、采样时间保存到配置文件
-        ttk.Button(base_frame, text="保存", command=lambda: MemStatCfg.save_config_device(base_entry,config_window,basename,base_key), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
+        ttk.Button(base_frame, text="保存", command=lambda: MemStatCfg.save_config_device(app,base_entry,config_window,basename,base_key,base_dict_int), style="TButton").grid(row=4, column=0, padx=10, pady=10, sticky="se")
         #ttk.Button(base_frame, text="刷新", command=self.reload).grid(row=3, column=1, pady=10)
          # 添加退出按钮
         ttk.Button(base_frame, text="退出", command=lambda: MemStatCfg.close_config_window(config_window), style="TButton").grid(row=4, column=1, padx=100, pady=10, sticky="sw")
