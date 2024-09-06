@@ -1,4 +1,5 @@
 import json
+import socket
 from tkinter import messagebox, ttk
 import tkinter
 
@@ -33,6 +34,7 @@ class MemStatCfg:
                 "is_backtrace":0    # 是否支持backtrace栈回溯
             }
         }
+        config['server']["host"] = socket.gethostbyname(socket.gethostname())
         return config
     
     @staticmethod

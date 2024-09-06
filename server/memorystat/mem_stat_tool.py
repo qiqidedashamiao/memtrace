@@ -19,17 +19,19 @@ class MemStatTool:
         memory_change_menu.add_command(label="停止", command=lambda: self.__on_mem_stat_stop(memory_change_menu))
 
         # 将“内存变化”子菜单添加到“工具”菜单中
-        tool_menu.add_cascade(label="内存变化", menu=memory_change_menu)
+        tool_menu.add_cascade(label="内存统计", menu=memory_change_menu)
 
     def __on_mem_stat_start(self,memory_change_menu):
         if self.__running:
-            messagebox.showinfo("提示", "内存统计已经启动")
+            # messagebox.showinfo("提示", "内存统计已经启动")
+            self.logger.info(f"内存统计已经启动")
             return
         self.__running = True
         self.__process = MemStatProcess(self.app)
         self.logger.info(f"内存统计启动")
         if self.__process.start():
-            messagebox.showinfo("提示", "内存统计启动成功")
+            # messagebox.showinfo("提示", "内存统计启动成功")
+            self.logger.info(f"内存统计启动成功")
         else:
             messagebox.showinfo("提示", "内存统计启动失败")
             self.__running = False

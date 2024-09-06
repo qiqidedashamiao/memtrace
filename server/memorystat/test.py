@@ -1,3 +1,8 @@
+import threading
+
+from mem_stat_con import MemStatCon
+
+
 class test:
     print("类初始化")
     a = 1
@@ -18,16 +23,25 @@ class test:
         print(f'b00:{test.b}')
 
 # print(f'a:{test.a}')
-print(f'b:{test.b}')
-obj = test()
+# print(f'b:{test.b}')
+# obj = test()
 # print(f'a1:{test.a}')
 # print(f'a2:{obj.a}')
 
-print(f'b1:{test.b}')
-print(f'b2:{obj.b}')
-# del obj
-obj = None
-# print(f'a3:{test.a}')
-# print(f'a4:{obj}')
-print(f'b3:{test.b}')
-print("结束运行")
+# print(f'b1:{test.b}')
+# print(f'b2:{obj.b}')
+# # del obj
+# obj = None
+# # print(f'a3:{test.a}')
+# # print(f'a4:{obj}')
+# print(f'b3:{test.b}')
+# print("结束运行")
+# def handle_client():
+#     print("handle_client")
+#     pass
+# thread = threading.Thread(target=handle_client)
+# thread.start()
+
+conn = MemStatCon(app=None)
+conn.start(app=None)
+conn.stop()
