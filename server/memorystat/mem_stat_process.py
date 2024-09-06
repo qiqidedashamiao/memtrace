@@ -24,7 +24,7 @@ class MemStatProcess:
     def start(self):
         self.logger.info("start0")
         #增加调试接口
-        pdb.set_trace()
+        # pdb.set_trace()
         ret = self.conn.start(self.app)
         self.logger.info("start0 end")
         return ret
