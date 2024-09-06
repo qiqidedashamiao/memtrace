@@ -8,6 +8,7 @@ class MemStatProcess:
         self.app = app
         self.logger = app.get_logger()
         self.sock = None
+        self.thread_listen = None
         pass
     def __del__(self):
         pass
@@ -19,8 +20,17 @@ class MemStatProcess:
         pass
 
     def stop(self):
+        self.logger.info("stop")
         if self.sock:
             self.sock.close()
+        if self.thread_listen is not None:
+            self.thread_listen.join()
+            self.thread_listen = None
+        if self.thread_client is not None:
+            self.thread_client.join()
+            self.thread_client = None
+        self.logger.info("stop end")
+
 
     def connect(self):
         self.logger.info("connect start")
@@ -60,11 +70,11 @@ class MemStatProcess:
         try:
             while True:
                 conn, addr = self.sock.accept()
-                thread = threading.Thread(target=self.handle_client, args=(conn, addr))
-                thread.start()
+                self.thread_client = threading.Thread(target=self.handle_client, args=(conn, addr))
+                self.thread_client.start()
         except Exception as e:
             self.logger.error(f"监听失败:{e}")
-            messagebox.showinfo("提示", f"监听失败:{e}")
+            # messagebox.showinfo("提示", f"监听失败:{e}")
     
     def handle_client(self, conn, addr):
         self.logger.info(f"Connected by {addr}")
