@@ -21,6 +21,8 @@ class MemStatTool:
         # 将“内存变化”子菜单添加到“工具”菜单中
         tool_menu.add_cascade(label="内存统计", menu=memory_change_menu)
 
+        app.register_close_callback(self.on_closing)
+
     def __on_mem_stat_start(self,memory_change_menu):
         if self.__running:
             # messagebox.showinfo("提示", "内存统计已经启动")
@@ -45,6 +47,14 @@ class MemStatTool:
         self.__process = None
         self.__running = False
         pass
+
+    def on_closing(self):
+        self.logger.info("on_closing")
+        if self.__running:
+            self.__process.stop()
+            self.__process = None
+            self.__running = False
+        self.logger.info("on_closing end")
 
 
 

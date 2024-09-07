@@ -16,6 +16,8 @@ class ConfigApp:
     m_ssh_memory = None
     def __init__(self, root):
         
+        self.close_callbacks = []  # 用于保存注册的关闭窗口时回调函数
+
          # 初始化绘图变量
         self.chart_window = None  # 折线图窗口
         self.is_running = False   # 用于控制图表更新的状态
@@ -107,6 +109,10 @@ class ConfigApp:
     
     def get_logger(self):
         return self.logger
+    
+    def register_close_callback(self, callback):
+        """注册回调函数"""
+        self.close_callbacks.append(callback)
 
     def start(self):
         # self.load_config()
@@ -294,11 +300,24 @@ class ConfigApp:
 
 
     def on_closing(self):
-        # 关闭SSH连接
-        if self.m_ssh_memory is not None:
-            self.m_ssh_memory.close()
+        """关闭窗口时的处理"""
+        self.logger.info("关闭窗口")
+        try:
+            # 关闭SSH连接
+            if self.m_ssh_memory is not None:
+                self.m_ssh_memory.close()
+        except Exception as e:
+            self.logger.error(f"关闭SSH连接失败: {e}")
+
+        #执行其他注册函数
+        for callback in self.close_callbacks:
+            try:
+                callback()
+            except Exception as e:
+                self.logger.error(f"回调函数执行失败: {e}")
         # 关闭Tkinter窗口
         self.root.destroy()
+        # self.logger.info("窗口已关闭")
 
     def on_memory_start(self):
         self.logger.info("内存变化开始")
