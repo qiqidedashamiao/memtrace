@@ -11,6 +11,11 @@
 #include <unistd.h>
 #include <malloc.h>
 #include <new>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <cerrno>
 
 //如果定义宏USE_BACKTRACK，则包含头文件<execinfo.h>
 #ifdef USE_BACKTRACE
@@ -76,6 +81,7 @@ typedef enum ENUM_MEMOPTYPE
 	MEMOP_NEW_ARRAY_BIG = 13,
 	MEMOP_REALLOC_BIG = 14,
 	MEMOP_MAX = 15,
+	MEMOP_MAP = 16,
 	//MEMOP_STRDUP = 16,
 }ENUM_MEMOPTYPE;
 
@@ -162,6 +168,7 @@ static int g_writelen = 0;
 int g_writeThread = -1;
 static __thread int gst_in_malloc = 0;	
 // 定义一个线程本地变量gst_in_malloc，用于标识当前线程是否在malloc中
+static int g_sockfd = -1;
 
 // 清理函数（如果需要）
 __attribute__((destructor)) void cleanup() {
@@ -187,7 +194,7 @@ void printMap(int pid)
 	char cmd[128] = {0};
 	len = sprintf(cmd, "cat /proc/%d/maps > %s", pid, name);
 	// cmd[len] = '\0';
-	cmd[strlen(cmd) - 1] = '\0';
+	cmd[strlen(cmd)] = '\0';
 	fprintf(stdout, "[%s:%d][pid:%d][tid:%ld]cmd:%s\n", __FUNCTION__, __LINE__, pid, gettid(), cmd);
 	stream = popen(cmd, "w");
 	if (stream == NULL)
@@ -213,66 +220,6 @@ void* writeFunction(void* arg)
     pthread_exit(NULL);
 	return NULL;
 }
-/**
-参数：ipaddr port 函数名：建立tcp连接
-目的：建立tcp连接
-返回值：成功返回0，失败返回-1
-*/
-// int tcp_connect(const char *ipaddr, int port)
-// {
-// 	int sockfd;
-// 	struct sockaddr_in servaddr;
-// 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-// 	{
-// 		perror("socket");
-// 		return -1;
-// 	}
-// 	bzero(&servaddr, sizeof(servaddr));
-// 	servaddr.sin_family = AF_INET;
-// 	servaddr.sin_port = htons(port);
-// 	if (inet_pton(AF_INET, ipaddr, &servaddr.sin_addr) <= 0)
-// 	{
-// 		perror("inet_pton");
-// 		return -1;
-// 	}
-// 	if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
-// 	{
-// 		perror("connect");
-// 		return -1;
-// 	}
-// 	return sockfd;
-// }
-
-// /**
-//  * purpose: 通过tcp_connect建立链接，发送g_writebuf里面的数据
-//  * param:ipaddr port 
-//  * return:
-// */
-// void send_data(const char *ipaddr, int port)
-// {
-// 	int sockfd = tcp_connect(ipaddr, port);
-// 	if (sockfd < 0)
-// 	{
-// 		return;
-// 	}
-// 	int len = 0;
-// 	while (1)
-// 	{
-// 		pthread_mutex_lock(&mwGlobalMutexWrite);
-// 		if (g_writelen > 0)
-// 		{
-// 			len = write(sockfd, g_writebuf, g_writelen);
-// 			if (len < 0)
-// 			{
-// 				perror("write");
-// 				break;
-// 			}
-// 			g_writelen = 0;
-// 		}
-// 		pthread_mutex_unlock(&mwGlobalMutexWrite);
-// 	}
-// 	close(sockfd);
-// }
 
 /**
  * purpose: 读取memtrace_param文件，获取是否开启内存跟踪，是否跟踪栈信息，跟踪申请的内存大小，跟踪线程id
@@ -526,6 +473,156 @@ void _main(int argc, char** argv)
 	}
 }
 
+// __attribute__ ((destructor))
+// void _end()
+// {
+// 	fprintf(stdout,"[pid:%d][tid:%ld]zl: malloctest end g_sockfd:%d\n",getpid(), gettid(), g_sockfd);
+// 	if (g_sockfd > 0)
+// 	{
+// 		close(g_sockfd);
+// 	}
+// }
+
+/**
+参数：ipaddr port 函数名：建立tcp连接
+目的：建立tcp连接
+返回值：成功返回0，失败返回-1
+*/
+int tcp_connect(const char *ipaddr, int port)
+{
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] socket.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+	int sockfd = -1;
+	struct sockaddr_in servaddr;
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+	{
+		fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] socket error:%d.\n", __FUNCTION__, __LINE__,getpid(), gettid(),sockfd);
+		return -1;
+	}
+	bzero(&servaddr, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(port);
+	int ret;
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] inet_pton.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+	if ((ret = inet_pton(AF_INET, ipaddr, &servaddr.sin_addr)) <= 0)
+	{
+		fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] inet_pton error:%d.\n", __FUNCTION__, __LINE__,getpid(), gettid(),ret);
+		close(sockfd);
+		return -1;
+	}
+	
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] connect.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+	if ((ret = connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) < 0)
+	{
+		fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] connect error:%d.\n", __FUNCTION__, __LINE__,getpid(), gettid(),ret);
+		close(sockfd);
+		return -1;
+	}
+	
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] end.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+	return sockfd;
+}
+
+/**
+ * purpose: 通过tcp_connect建立链接，发送g_writebuf里面的数据
+ * param:ipaddr port 
+ * return:
+*/
+int send_data(const char *ipaddr, int port)
+{
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] send_data start.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+	int sockfd = tcp_connect(ipaddr, port);
+	if (sockfd < 0)
+	{
+		fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] connect failed.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+		return -1;
+	}
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] tcp_connect success:%d.\n", __FUNCTION__, __LINE__,getpid(), gettid(), sockfd);
+	g_sockfd = sockfd;
+
+	char name[256] = {0};
+	struct tm t;
+	time_t tt;
+	time(&tt);
+	localtime_r(&tt, &t);
+	int len = sprintf(name, "%s/maps-%04d%02d%02d_%02d%02d%02d-%d.txt", g_path_map_dir, t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, getpid());
+	name[len] = '\0';
+	FILE *stream;
+	char cmd[256] = {0};
+	len = sprintf(cmd, "cat /proc/%d/maps > %s", getpid(), name);
+	// cmd[len] = '\0';
+	cmd[strlen(cmd)] = '\0';
+	fprintf(stdout, "[%s:%d][pid:%d][tid:%ld]cmd:%s\n", __FUNCTION__, __LINE__, getpid(), gettid(), cmd);
+	stream = popen(cmd, "w");
+	if (stream == NULL)
+	{
+		fprintf(stdout, "[%s:%d]error\n", __FUNCTION__, __LINE__);
+		return -1;
+	}
+	fclose(stream);
+
+	// 读取当前进程的maps文件
+	// char mapsFile[128] = {0};
+	// sprintf(mapsFile, "/proc/%d/maps", getpid());
+	// const char* mapsFile = "/proc/self/maps";
+    int fd = open(name, O_RDONLY);
+    if (fd == -1) {
+        fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] open:%s failed:%s.\n", __FUNCTION__, __LINE__,getpid(), gettid(),name,strerror(errno));
+		// std::cerr << "Error: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] fstat failed.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+        close(fd);
+        return -1;
+    }
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] st.st_size :%ld.\n", __FUNCTION__, __LINE__,getpid(), gettid(), st.st_size);
+	unsigned int len1 = st.st_size;
+	char *buffer = (char *)__libc_calloc(1 + 4 + len1 + 1, 1);
+	buffer[0] = MEMOP_MAP;
+	memcpy(buffer + 1, &len1, 4);
+	ssize_t bytesRead = read(fd, buffer+5, st.st_size);
+    if (bytesRead == -1) {
+        fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] bytesRead failed.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+        close(fd);
+		free(buffer);
+        return -1;
+    }
+    buffer[bytesRead] = '\0';
+	close(fd);
+	int ret = write(sockfd, buffer, 1 + 4 + len1);
+	if (ret < 0)
+	{
+		fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] write failed:%d.\n", __FUNCTION__, __LINE__,getpid(), gettid(),ret);
+	}
+	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] send success:%u .\n", __FUNCTION__, __LINE__,getpid(), gettid(),len1+5);
+	free(buffer);
+	close(sockfd);
+	g_sockfd = -1;
+	return 0;
+	// g_sockfd = sockfd;
+	// int len = 0;
+	// while (1)
+	// {
+	// 	pthread_mutex_lock(&mwGlobalMutexWrite);
+	// 	if (g_writelen > 0)
+	// 	{
+	// 		len = write(sockfd, g_writebuf, g_writelen);
+	// 		if (len < 0)
+	// 		{
+	// 			perror("write");
+	// 			break;
+	// 		}
+	// 		g_writelen = 0;
+	// 	}
+	// 	pthread_mutex_unlock(&mwGlobalMutexWrite);
+	// }
+	// close(sockfd);
+}
+
+
+
 /**
  * purpose: 初始化内存跟踪信息
  * param:
@@ -534,11 +631,20 @@ void _main(int argc, char** argv)
 void MemTraceInit()
 {
 	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] MemTraceInit 1.\n", __FUNCTION__, __LINE__,getpid(), gettid());
-	int ret = 0;
+	// int ret = 0;
 	//printMap(getpid());
+	int ret = send_data("192.168.0.20", 65511);
+	if (ret < 0)
+	{
+		close(g_sockfd);
+		g_sockfd = -1;
+		fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] send_data failed.\n", __FUNCTION__, __LINE__,getpid(), gettid());
+	}
 	//ret = pthread_mutex_init(&mwGlobalMutexMemTrace, NULL);
 	fprintf(stdout,"[%s:%d][pid:%d][tid:%ld] MemTraceInit 2. ret: %d.\n", __FUNCTION__, __LINE__,getpid(), gettid(), ret);
 }
+
+
 
 /**
  * purpose: 保存内存跟踪信息

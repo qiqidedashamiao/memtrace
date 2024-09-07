@@ -1,8 +1,10 @@
 import asyncio
 from csv import reader, writer
+from email.utils import parsedate
 import pdb
 import select
 import socket
+import struct
 import threading
 
 
@@ -59,11 +61,42 @@ class MemStatCon:
         self.active_connections.append((reader, writer))
         try:
             while True:
-                data = await reader.read(1024)
+                data = await reader.read(1)
+
                 if not data:
                     break
-                self.logger.info(f"Received {data} from {addr}")
-                data_send = f"received {len(data)} bytes".encode()
+                # self.logger.info(f"Received {data} from {addr}")
+                parse_date = {}
+                parse_date['type'] = data
+                # parsed_data = {
+                # 'type': mem_log_info[0],
+                # 'len': mem_log_info[1],
+                # 'tid': mem_log_info[2],
+                # 'currtime': mem_log_info[3],
+                # 'size': mem_log_info[4],
+                # 'ptr': mem_log_info[5],
+                # 'ptrlr': mem_log_info[6],
+                # 'ptrx': mem_log_info[7],
+                # 'spinfo': mem_log_info[8:]
+                # }
+                # struct_format = '<I'
+                # struct_size = struct.calcsize(struct_format)
+
+                if data == b"16":
+                    data = await reader.read(4)
+                    parse_date['len'] = struct.unpack('!I', data)[0]
+                    if parse_date['len'] == 0:
+                        self.logger.info(f"Received error {parse_date['len']} from {addr}")
+                        break
+                    parse_date['maps'] = await reader.read(parse_date['len']).decode()
+                    self.logger.info(f"parse_date:{parse_date}")
+                # elif data == b"2":
+                #     data = await reader.readuntil(b"\n")
+                #     self.logger.info(f"Received {data} from {addr}")
+                # else:
+                #     self.logger.error(f"Unknown data type {data_type}")
+
+                # data_send = f"received {len(data)} bytes".encode()
                 # writer.write(data_send)
                 # await writer.drain()
         except Exception as e:

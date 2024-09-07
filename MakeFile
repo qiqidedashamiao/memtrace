@@ -116,7 +116,7 @@ CFLAGS += -DTIME_INTERVAL_WRITE=$(TIME_INTERVAL_WRITE)
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
+$(TARGET): clean $(SRC)
 	$(CPP) -shared -fpic $(CFLAGS)  -o $(TARGET) $(SRC) 
 	#$(STRIP) $(TARGET)
 
