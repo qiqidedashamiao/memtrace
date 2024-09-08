@@ -281,7 +281,7 @@ class ConfigApp:
         self.log_handler = logging.StreamHandler(self)
         self.log_handler.setLevel(logging.INFO)
 
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s - %(lineno)d - %(message)s')
+        formatter = logging.Formatter('%(asctime)s - %(thread)d -%(levelname)s - %(filename)s - %(lineno)d - %(message)s')
         self.log_handler.setFormatter(formatter)
 
         self.logger.addHandler(self.log_handler)

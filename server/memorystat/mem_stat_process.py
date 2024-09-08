@@ -1,3 +1,4 @@
+import asyncio
 import pdb
 import socket
 import socketserver
@@ -18,6 +19,7 @@ class MemStatProcess:
         self.thread_client = None
         self.server = None
         self.conn = MemStatCon(app)
+        
         pass
     def __del__(self):
         pass
@@ -34,4 +36,31 @@ class MemStatProcess:
         self.conn.stop()
 
         self.logger.info("stop end")
+
+#新建一个队列线程类，处理推送过来的队列数据
+class MemStatThread(threading.Thread):
+    def __init__(self, queue, app):
+        threading.Thread.__init__(self)
+        # self.queue = queue
+        self.app = app
+        self.logger = app.get_logger()
+        self.is_running = True
+        self.queue = asyncio.Queue()
+        asyncio.create_task(self.run())
+        pass
+
+    async def run(self):
+        self.logger.info("run")
+        while self.is_running:
+            try:
+                # 从队列中获取数据
+                data = self.queue.get(timeout=1)
+                self.logger.info(f"get data:{data}")
+            except Exception as e:
+                self.logger.error(f"Exception in get data: {e}")
+        self.logger.info("run end")
+
+    def stop(self):
+        self.is_running = False
+        pass
 

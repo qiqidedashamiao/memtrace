@@ -1,25 +1,45 @@
 import asyncio
 from csv import reader, writer
 from email.utils import parsedate
+from enum import Enum
 import pdb
+import queue
 import select
 import socket
 import struct
 import threading
+import concurrent.futures
 
+class ENUM_MEMOPTYPE(Enum):
+    MEMOP_FREE = 0
+    MEMOP_DELETE = 1
+    MEMOP_DELETE_ARRAY = 2
+    MEMOP_MALLOC = 3
+    MEMOP_CALLOC = 4
+    MEMOP_NEW = 5
+    MEMOP_NEW_NOTHROW = 6
+    MEMOP_NEW_ARRAY = 7
+    MEMOP_REALLOC = 8
+    MEMOP_MALLOC_BIG = 9
+    MEMOP_CALLOC_BIG = 10
+    MEMOP_NEW_BIG = 11
+    MEMOP_NEW_NOTHROW_BIG = 12
+    MEMOP_NEW_ARRAY_BIG = 13
+    MEMOP_REALLOC_BIG = 14
+    MEMOP_MAX = 15
+    MEMOP_MAP = 16
 
 class MemStatCon:
     def __init__(self, app):
-        self.server_socket = None
         self.logger = app.get_logger()
-        self.thread_listen = None
         self.active_connections = []
+        self.thread_consumer = None
+        self.queue_data = queue.Queue()
         pass
 
     def start(self, app):
         self.logger.info("run start")
         # pdb.set_trace()
-        # print("start1")
         config = app.get_config_data()
         host = config["server"].get('host', '')
         port = config["server"].get('port', 65511)
@@ -49,9 +69,12 @@ class MemStatCon:
             self.loop.run_until_complete(writer.wait_closed())
         self.thread.join()
         self.loop.run_until_complete(self.server.wait_closed())
-        # self.loop.stop()
-        # self.loop.run_forever()
         self.loop.close()
+        self.server = None
+        self.logger.info("conn loop stop")
+        self.thread_consumer.join()
+        self.thread_consumer = None
+        self.logger.info(f"queue_data size: {self.queue_data.qsize()}")
         self.logger.info("conn stop end")
     
     async def handle_client(self, reader, writer):
@@ -59,6 +82,8 @@ class MemStatCon:
         self.logger.info(f"Connection from {addr}")
         # 添加到活动连接列表
         self.active_connections.append((reader, writer))
+        self.thread_consumer = threading.Thread(target=self.consumer, args=(reader, writer, addr))
+        self.thread_consumer.start()
         try:
             while True:
                 data = await reader.read(1)
@@ -66,30 +91,27 @@ class MemStatCon:
                 if not data:
                     break
                 # self.logger.info(f"Received {data} from {addr}")
+                data_type = struct.unpack('<b', data)[0]
                 parse_date = {}
-                parse_date['type'] = data
-                # parsed_data = {
-                # 'type': mem_log_info[0],
-                # 'len': mem_log_info[1],
-                # 'tid': mem_log_info[2],
-                # 'currtime': mem_log_info[3],
-                # 'size': mem_log_info[4],
-                # 'ptr': mem_log_info[5],
-                # 'ptrlr': mem_log_info[6],
-                # 'ptrx': mem_log_info[7],
-                # 'spinfo': mem_log_info[8:]
-                # }
-                # struct_format = '<I'
-                # struct_size = struct.calcsize(struct_format)
+                parse_date['type'] = data_type
+                
+                self.logger.info(f"Received {data_type} from {addr}")
 
-                if data == b"16":
+                if data_type == ENUM_MEMOPTYPE.MEMOP_MAP.value:
+                    self.logger.info(f"type is MEMOP_MAP")
                     data = await reader.read(4)
-                    parse_date['len'] = struct.unpack('!I', data)[0]
-                    if parse_date['len'] == 0:
-                        self.logger.info(f"Received error {parse_date['len']} from {addr}")
+                    self.logger.info(f"Received {data} from {addr}")
+                    data_len = struct.unpack('<I', data)[0]
+                    parse_date['len'] = data_len
+
+                    if data_len == 0:
+                        self.logger.info(f"Received error {data_len} from {addr}")
                         break
-                    parse_date['maps'] = await reader.read(parse_date['len']).decode()
-                    self.logger.info(f"parse_date:{parse_date}")
+                    self.logger.info(f"Received {data_len} from {addr}")
+                    data = await reader.read(data_len)
+                    parse_date['maps'] = data.decode()
+                    self.queue_data.put(parse_date)
+                    # self.logger.info(f"parse_date:{parse_date}")
                 # elif data == b"2":
                 #     data = await reader.readuntil(b"\n")
                 #     self.logger.info(f"Received {data} from {addr}")
@@ -102,8 +124,23 @@ class MemStatCon:
         except Exception as e:
             self.logger.error(f"Exception in handle_client: {e}")
         finally:
+            self.queue_data.put(None)
             # 从活动连接列表中移除
             self.active_connections.remove((reader, writer))
             writer.close()
             await writer.wait_closed()
             self.logger.info(f"Connection closed from {addr}")
+
+    def consumer(self, reader, writer, addr):
+        self.logger.info(f"Consumer started for {addr}")
+        while True:
+            try:
+                data = self.queue_data.get()
+                # self.logger.info(f"Received data: {data}")
+                if data is None:
+                    self.logger.info(f"Received None from {addr}")
+                    break
+                # self.queue_data.task_done()
+            except Exception as e:
+                self.logger.error(f"Exception in consumer: {e}")
+        self.logger.info(f"Consumer finished for {addr}")
