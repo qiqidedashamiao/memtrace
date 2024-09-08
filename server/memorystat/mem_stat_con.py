@@ -35,6 +35,7 @@ class MemStatCon:
         self.active_connections = []
         self.thread_consumer = None
         self.queue_data = queue.Queue()
+        self.maps = MemStatMaps(app)
         pass
 
     def start(self, app):
@@ -140,7 +141,41 @@ class MemStatCon:
                 if data is None:
                     self.logger.info(f"Received None from {addr}")
                     break
+                if data['type'] == ENUM_MEMOPTYPE.MEMOP_MAP.value:
+                    self.maps.parse_maps_data(data)
                 # self.queue_data.task_done()
             except Exception as e:
                 self.logger.error(f"Exception in consumer: {e}")
         self.logger.info(f"Consumer finished for {addr}")
+
+#解析接收到进程的maps数据，并解析出每个模块的起始地址和大小
+#00400000-00407000 r-xp 00000000 fd:00 42949                              /root/mount/share/memtrace/sonia
+class MemStatMaps:
+    def __init__(self, app):
+        #key:end_addr, value:size
+        self.maps = {}
+        self.logger = app.get_logger()
+        pass
+
+    def parse_maps_data(self, data):
+        self.maps.clear()
+        maps = data['maps']
+        maps_list = maps.split("\n")
+        for map in maps_list:
+            content = {}
+            map_list = map.split(" ")
+            if len(map_list) < 6:
+                continue
+            addr = map_list[0]
+            addr_list = addr.split("-")
+            key = int(addr_list[1], 16)
+            content["start_addr"] = addr_list[0]
+            content["end_addr"] = addr_list[1]
+            content["name"] = map_list[-1].split("/")[-1]
+            if len(content["name"]) == 0 or '[' in content["name"]:
+                continue
+            self.maps[key] = content
+            self.logger.info(f"key:0x{key:08x} content:{content}")
+        # self.logger.info(f"maps:{self.maps}")
+
+
