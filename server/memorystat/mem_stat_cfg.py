@@ -23,7 +23,7 @@ class MemStatCfg:
             "server": {
                 "host": "",         # 主机地址
                 "port": 65511,      # 主机端口
-                "result_path":"",   # 内存统计结果路径
+                "result_path":"data/memstat/",   # 内存统计结果路径
                 "ip": "",           # 编译服务器ip
                 "username": "",     # 编译服务器用户名
                 "password": "",     # 编译服务器密码

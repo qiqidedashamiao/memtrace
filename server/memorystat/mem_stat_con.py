@@ -154,6 +154,8 @@ class MemStatMaps:
     def __init__(self, app):
         #key:end_addr, value:size
         self.maps = {}
+        # self.process = process
+        self.app = app
         self.logger = app.get_logger()
         pass
 
@@ -176,6 +178,13 @@ class MemStatMaps:
                 continue
             self.maps[key] = content
             self.logger.info(f"key:0x{key:08x} content:{content}")
-        # self.logger.info(f"maps:{self.maps}")
+            
+    def write_file(self, data):
+        #文件名字为maps_年月日时分秒
+        filename = f"maps_{data['time']}.csv"
+        with open(filename, "w") as f:
+            f.write(data)
+        pass
+
 
 
