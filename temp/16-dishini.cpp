@@ -73,8 +73,76 @@ int main()
     //     cout << value[i] << " ";
     // }
     // cout << endl;
-    pair<int, int> res = make_pair(0, 0);
-    map<pair<int,int>, int> m;
+    // pair<int, int> res = make_pair(0, 0);
+    // map<pair<int,int>, int> m;
+    map<int, map<int,int>> index_map;
+    for (int i = 0; i < edges.size(); i++)
+    {
+        index_map[edges[i][0]][edges[i][1]] = 1;
+        index_map[edges[i][1]][edges[i][0]] = 1;
+    }
+    map<int, map<int,int>>::iterator it = index_map.begin();
+    while (it != index_map.end())
+    {
+        if (it->second.size() == 1)
+        {
+
+            // cout << it->first << " ";
+            map<int,int>::iterator it2 = it->second.begin();
+            int index = it2->first;
+            if (index_map[index].size() == 1)
+            {
+                // cout << it->first << " " << index << endl;
+                digui(index, it->first, index_map);
+            }
+            it->second.clear();
+        }
+        it++;
+    }
+    
+    map<int, map<int,int>>::iterator it = index_map.begin();
+    while (it != index_map.end())
+    {
+        if (it->second.size() == 0)
+        {
+            index_map.erase(it++);
+        }
+        else
+        {
+            it++;
+        }
+    }
+    cout << index_map.size() << endl;
+    map<int, map<int,int>>::iterator it = index_map.begin();
+    while (it != index_map.end())
+    {
+        map<int,int>::iterator it2 = it->second.begin();
+        
+
+        
+        it++;
+    }
+
+    
+      
+
+    
 
     return 0;
+}
+
+void digui(int index, int remove, map<int, map<int,int>> index_map)
+{
+    index_map[index].erase(remove);
+    if (index_map[index].size() == 1)
+    {
+        map<int,int>::iterator it = index_map[index].begin();
+        int index2 = it->first;
+        digui(index2, index, index_map);
+        index_map[index].clear();
+    }
+    // else if (index_map[index].size() == 0)
+    // {
+    //     index_map.erase(index);
+    // }
 }
