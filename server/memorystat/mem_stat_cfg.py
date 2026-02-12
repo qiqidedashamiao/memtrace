@@ -31,7 +31,8 @@ class MemStatCfg:
                 "cross": "",        # 设备交叉编译器
                 "lib_path":"",      # 设备库路径
                 "is_aslr":0,    # 是否开启aslr
-                "is_backtrace":0    # 是否支持backtrace栈回溯
+                "is_backtrace":0,    # 是否支持backtrace栈回溯
+                "bit_len":8    # 机器对齐长度 8:64位操作系统 4:32位操作系统
             }
         }
         config['server']["host"] = socket.gethostbyname(socket.gethostname())
@@ -110,11 +111,11 @@ class MemStatCfg:
         # configure_grid(server_frame)
         row_index = 0
         # 在“编译服务器配置”界面中添加控件
-        servertextlist = ["IP:", "用户名:", "密码:", "镜像编号","交叉编译链:","库路径","支持ANSR","支持backtrace"]
-        servername = ["ip", "username", "password","num", "cross","lib_path","is_aslr","is_backtrace"]
+        servertextlist = ["IP:", "用户名:", "密码:", "镜像编号","交叉编译链:","库路径","支持ANSR","支持backtrace", "机器对齐长度"]
+        servername = ["ip", "username", "password","num", "cross","lib_path","is_aslr","is_backtrace","bit_len"]
         server_entry = {}  # Define the server_entry dictionary
         server_key = "server"
-        server_dict_int = {"num","is_aslr","is_backtrace"}
+        server_dict_int = {"num","is_aslr","is_backtrace","bit_len"}
         for i in range(len(servertextlist)):
             ttk.Label(server_frame, text=servertextlist[i], font=font_large).grid(row=i, column=0, padx=10, pady=10, sticky="se")
             server_entry[i] = ttk.Entry(server_frame, font=font_large)

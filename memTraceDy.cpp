@@ -97,7 +97,7 @@ typedef struct __attribute__((packed)) MemLogInfo {
 	int8_t dep;
 	int16_t tid;
 	unsigned int currtime;
-	int size;
+	unsigned int size;
 	void *ptr;    // 内存指针
 	void *ptrlr;  // 调用堆栈指针
 	void *ptrx;   // remalloc 之前使用指针

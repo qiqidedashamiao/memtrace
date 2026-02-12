@@ -36,6 +36,9 @@ class MemStatCon:
         self.thread_consumer = None
         self.queue_data = queue.Queue()
         self.maps = MemStatMaps(app)
+        self.raws_data = MemStatRaws(app)
+        config = app.get_config_data()
+        self.bit_len = config["server"].get('bit_len', 8)
         pass
 
     def start(self, app):
@@ -87,6 +90,18 @@ class MemStatCon:
         self.thread_consumer.start()
         try:
             while True:
+                '''
+                - `<`：小端字节序
+                - `b`：有符号字符（1 字节）
+                - `b`：有符号字符（1 字节）
+                - `h`：有符号短整型（2 字节）
+                - `I`：无符号整型（4 字节）
+                - `i`：有符号整型（4 字节）
+                - `q`：有符号长长整型（8 字节）
+                - `q`：有符号长长整型（8 字节）
+                - `q`：有符号长长整型（8 字节）
+                - `16s`：16 字节的字符串
+                '''
                 data = await reader.read(1)
 
                 if not data:
@@ -112,16 +127,81 @@ class MemStatCon:
                     data = await reader.read(data_len)
                     parse_date['maps'] = data.decode()
                     self.queue_data.put(parse_date)
-                    # self.logger.info(f"parse_date:{parse_date}")
-                # elif data == b"2":
-                #     data = await reader.readuntil(b"\n")
-                #     self.logger.info(f"Received {data} from {addr}")
-                # else:
-                #     self.logger.error(f"Unknown data type {data_type}")
 
-                # data_send = f"received {len(data)} bytes".encode()
-                # writer.write(data_send)
-                # await writer.drain()
+                elif data_type == ENUM_MEMOPTYPE.MEMOP_REALLOC.value:
+                    data = await reader.read(1)
+                    data_len = struct.unpack('<b', data)[0]
+                    struct_format = '<hII'
+                    if self.bit_len == 8:
+                        struct_format += 'qqq'
+                        struct_format += 'q' * data_len
+                    else:
+                        struct_format += 'iii'
+                        struct_format += 'i' * data_len
+                    struct_size = struct.calcsize(struct_format)
+                    data = await reader.read(struct_size)
+                    mem_log_info = struct.unpack(struct_format, data)
+
+                    # 构建一个字典存储解包的数据
+                    parsed_data = {
+                        'type': data_type,
+                        'dep': data_len,
+                        'tid': mem_log_info[0],
+                        'currtime': mem_log_info[1],
+                        'size': mem_log_info[2],
+                        'ptr': mem_log_info[3],
+                        'ptrlr': mem_log_info[4],
+                        'ptrx': mem_log_info[5],
+                        'spinfo': mem_log_info[6:]
+                    }
+                    self.queue_data.put(parsed_data)
+                elif data_type >= ENUM_MEMOPTYPE.MEMOP_MALLOC.value:
+                    data = await reader.read(1)
+                    data_len = struct.unpack('<b', data)[0]
+                    struct_format = '<hII'
+                    if self.bit_len == 8:
+                        struct_format += 'qq'
+                        struct_format += 'q' * data_len
+                    else:
+                        struct_format += 'ii'
+                        struct_format += 'i' * data_len
+                    struct_size = struct.calcsize(struct_format)
+                    data = await reader.read(struct_size)
+                    mem_log_info = struct.unpack(struct_format, data)
+                    # 构建一个字典存储解包的数据
+                    parsed_data = {
+                        'type': data_type,
+                        'dep': data_len,
+                        'tid': mem_log_info[0],
+                        'currtime': mem_log_info[1],
+                        'size': mem_log_info[2],
+                        'ptr': mem_log_info[3],
+                        'ptrlr': mem_log_info[4],
+                        'spinfo': mem_log_info[5:]
+                    }
+                    self.queue_data.put(parsed_data)
+                else:
+                    data = await reader.read(1)
+                    data_len = 0
+                    struct_format = '<hII'
+                    if self.bit_len == 8:
+                        struct_format += 'q'
+                    else:
+                        struct_format += 'i'
+                    struct_size = struct.calcsize(struct_format)
+                    data = await reader.read(struct_size)
+                    mem_log_info = struct.unpack(struct_format, data)
+                    # 构建一个字典存储解包的数据
+                    parsed_data = {
+                        'type': data_type,
+                        'dep': data_len,
+                        'tid': mem_log_info[0],
+                        'currtime': mem_log_info[1],
+                        'size': mem_log_info[2],
+                        'ptr': mem_log_info[3]
+                    }
+                    self.queue_data.put(parsed_data)
+
         except Exception as e:
             self.logger.error(f"Exception in handle_client: {e}")
         finally:
@@ -143,6 +223,8 @@ class MemStatCon:
                     break
                 if data['type'] == ENUM_MEMOPTYPE.MEMOP_MAP.value:
                     self.maps.parse_maps_data(data)
+                else:
+                    self.raws_data.parse_mem_data(data)
                 # self.queue_data.task_done()
             except Exception as e:
                 self.logger.error(f"Exception in consumer: {e}")
@@ -185,6 +267,16 @@ class MemStatMaps:
         with open(filename, "w") as f:
             f.write(data)
         pass
+
+class MemStatRaws:
+    def __init__(self, app):
+        self.app = app
+        self.logger = app.get_logger()
+
+    def parse_mem_data(self, data):
+        pass
+
+
 
 
 
